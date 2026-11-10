@@ -6,6 +6,7 @@ import { productRoutes } from './routes/products.js';
 import { orderRoutes } from './routes/orders.js';
 import { analyticsRoutes } from './routes/analytics.js';
 import { promoRoutes } from './routes/promos.js';
+import { rateLimiterMiddleware } from './middleware/rateLimiter.js';
 
 const app = new Hono();
 
@@ -15,6 +16,9 @@ app.use('*', cors({
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
 }));
+
+// Enterprise Distributed Rate Limiter
+app.use('*', rateLimiterMiddleware);
 
 app.use('*', async (c, next) => {
   c.header('X-Content-Type-Options', 'nosniff');

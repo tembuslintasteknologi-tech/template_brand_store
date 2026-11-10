@@ -10,10 +10,12 @@ services:
     environment:
       - PORT=3000
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/brand_store_db
-      - JWT_SECRET=production-secret-key-change-me
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=enterprise-secure-jwt-secret-change-me
       - CORS_ORIGIN=*
     depends_on:
       - postgres
+      - redis
     restart: always
 
   postgres:
@@ -28,5 +30,15 @@ services:
       - pgdata:/var/lib/postgresql/data
     restart: always
 
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    restart: always
+
 volumes:
   pgdata:
+  redisdata:

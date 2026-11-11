@@ -197,3 +197,24 @@ Catatan:
     sebaiknya dirotasi karena sudah tampil di output terminal sesi ini.
   - Remote URL sekarang bersih, jadi `graphify update` berikutnya akan menulis
     provenance tanpa token.
+
+---
+2026-11-12 (lanjutan)
+Task: BR-SCOPE - rencana Multi Cabang masuk TASK-CHECKLIST.md
+Jenis perubahan: dokumen saja (TASK-CHECKLIST.md). Tidak ada perubahan kode, schema,
+test, atau config di brand-store-app.
+Isi yang ditambahkan: section "Fase 2.5: Multi Cabang (di luar PRD, terkait INV-007 /
+INV-008)" berisi 16 baris BR-001..BR-016 dan 4 keputusan terbuka (OD-1..OD-4).
+Command:
+  git diff --stat
+Output:
+ TASK-CHECKLIST.md | 34 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 34 insertions(+)
+Command:
+  git status --porcelain -- brand-store-app
+Output:
+(empty)
+Catatan:
+  Graph tidak di-rebuild karena tidak ada node atau edge baru di brand-store-app.
+  Bukti: `git status --porcelain -- brand-store-app` kosong, jadi isi graph.json
+  yang terakhir (703 nodes / 1593 edges) masih mewakili kode saat ini.

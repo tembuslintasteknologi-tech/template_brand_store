@@ -40,6 +40,8 @@ export const products = pgTable('products', {
   status: varchar('status', { length: 50 }).notNull().default('draft'), // 'draft', 'published', 'archived'
   images: jsonb('images').default([]),
   attributes: jsonb('attributes').default({}),
+  metaTitle: varchar('meta_title', { length: 200 }),
+  metaDescription: text('meta_description'),
   createdBy: uuid('created_by').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -548,10 +550,15 @@ export const wishlists = pgTable('wishlists', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
   productId: uuid('product_id').references(() => products.id, { onDelete: 'cascade' }).notNull(),
+  notifyPriceDrop: boolean('notify_price_drop').notNull().default(true),
+  notifyBackInStock: boolean('notify_back_in_stock').notNull().default(true),
+  lastNotifiedPrice: decimal('last_notified_price', { precision: 12, scale: 2 }),
+  lastBackInStockNotifiedAt: timestamp('last_back_in_stock_notified_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => ({
   userProductIdx: uniqueIndex('wishlists_user_product_idx').on(table.userId, table.productId),
   userIdx: index('wishlists_user_idx').on(table.userId),
+  productIdx: index('wishlists_product_idx').on(table.productId),
 }));
 
 // ---------------------------------------------------------------------------
@@ -591,4 +598,36 @@ export const reviewReports = pgTable('review_reports', {
 }, (table) => ({
   reviewIdx: index('review_reports_review_idx').on(table.reviewId),
   statusIdx: index('review_reports_status_idx').on(table.status),
+}));
+
+// ---------------------------------------------------------------------------
+// REVIEW HELPFUL VOTES
+// ---------------------------------------------------------------------------
+export const reviewHelpfulVotes = pgTable('review_helpful_votes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  reviewId: uuid('review_id').references(() => reviews.id, { onDelete: 'cascade' }).notNull(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  reviewUserIdx: uniqueIndex('review_helpful_review_user_idx').on(table.reviewId, table.userId),
+  reviewIdx: index('review_helpful_review_idx').on(table.reviewId),
+}));
+
+// ---------------------------------------------------------------------------
+// USER DEVICES (push notification tokens)
+// ---------------------------------------------------------------------------
+export const userDevices = pgTable('user_devices', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  platform: varchar('platform', { length: 20 }).notNull(), // 'android', 'ios', 'web'
+  token: text('token').notNull().unique(),
+  deviceName: varchar('device_name', { length: 150 }),
+  appVersion: varchar('app_version', { length: 50 }),
+  isActive: boolean('is_active').notNull().default(true),
+  lastUsedAt: timestamp('last_used_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index('user_devices_user_idx').on(table.userId),
+  platformIdx: index('user_devices_platform_idx').on(table.platform),
 }));

@@ -93,3 +93,75 @@ Task: Push notification FCM/APNs
 Command: npm test src/tests/pushNotifications.test.ts
 Output: 
 Passed all tests including new pushNotifications.test.ts. Exit code: 0
+---
+2026-11-12
+Task: AGENT-CFG Agent instruction split (global vs repo)
+Command:
+  cd "E:\TEMBUS LINTAS TEKNOLOGI\TEMPLATE WEB MARKETPLACE\brand-store-app"
+  $env:ENGRAM_QUIET_DEPRECATION="1"
+  graphify update --no-description --no-label
+  graphify export obsidian --dir "E:\antigraviti google\SUDAH DEPLOY\vault\03 Resources\Graphify\brand-store-app"
+Output:
+Re-extracting code files in . (no LLM needed)...
+  AST extraction: 121/121 files (100%)
+[engram watch] Rebuilt: 682 nodes, 1548 edges, 39 communities
+[engram watch] graph.json and GRAPH_REPORT.md updated in E:\TEMBUS LINTAS TEKNOLOGI\TEMPLATE WEB MARKETPLACE\brand-store-app\.engram
+Code graph updated. For doc/paper/image changes run the engram skill with --update.
+Obsidian vault: 39 note(s) written to E:\antigraviti google\SUDAH DEPLOY\vault\03 Resources\Graphify\brand-store-app
+Canvas: E:\antigraviti google\SUDAH DEPLOY\vault\03 Resources\Graphify\brand-store-app\graph.canvas
+Exit code: 0
+---
+2026-11-12
+Task: Phase 2 selesai (push FCM/APNs, review + moderasi, wishlist alert, bulk produk, SEO, laporan keuangan, SMS/OTP)
+Files added:
+  src/services/notifications/pushService.ts
+  src/services/notifications/smsService.ts
+  src/services/reviews/reviewService.ts
+  src/services/wishlist/wishlistService.ts
+  src/services/catalog/bulkService.ts
+  src/services/catalog/seoService.ts
+  src/services/finance/financeService.ts
+  src/routes/reviews.ts
+  src/routes/wishlist.ts
+  src/routes/catalog.ts
+  src/routes/finance.ts
+Files changed:
+  src/db/schema.ts (products.meta_title/meta_description, wishlists alert columns, review_helpful_votes, user_devices)
+  src/services/notifications/notificationService.ts (notify() mirror ke push)
+  src/services/otp/otpService.ts (kode di Redis TTL 300s + SMS provider)
+  src/routes/notifications.ts (endpoint device register/unregister)
+  src/app.ts (mount route baru)
+Tests added:
+  src/tests/push.test.ts
+  src/tests/reviews.test.ts
+  src/tests/wishlist.test.ts
+  src/tests/bulk.test.ts
+  src/tests/seo.test.ts
+  src/tests/finance.test.ts
+  src/tests/sms.test.ts
+Command:
+  cd "E:\TEMBUS LINTAS TEKNOLOGI\TEMPLATE WEB MARKETPLACE\brand-store-app"
+  npx tsc --noEmit
+  npm test
+Output:
+tsc_exit=0
+# tests 251
+# suites 20
+# pass 251
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+Route smoke check (script sementara, dihapus setelah run):
+PASS 500 /api/v1/products/kaos-katun/seo
+PASS 500 /api/v1/pages/retur/seo
+PASS 500 /api/v1/products/kaos-katun/reviews
+PASS 401 /api/v1/wishlist
+PASS 401 /api/v1/notifications/devices
+PASS 401 /api/v1/admin/products/export
+PASS 401 /api/v1/admin/finance/summary
+PASS 401 /api/v1/admin/reviews
+PASS 401 /api/v1/admin/products/seo-audit
+PASS 404 /api/v1/this-route-does-not-exist
+ALL_ROUTES_REGISTERED
+Catatan: 500 pada endpoint publik berasal dari kredensial PostgreSQL lokal yang belum tersedia, bukan route yang tidak termount.

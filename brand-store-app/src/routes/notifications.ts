@@ -13,6 +13,7 @@ import {
   unreadCount,
   upsertTemplate,
 } from '../services/notifications/notificationService.js';
+import { listDevices, registerDevice, unregisterDevice } from '../services/notifications/pushService.js';
 
 export const notificationRoutes = new Hono();
 notificationRoutes.use('*', authMiddleware);
@@ -90,6 +91,48 @@ notificationRoutes.post('/:id/read', async (c) => {
     const userId = await recipient(c);
     const row = await markRead(userId, c.req.param('id') as string);
     return c.json({ success: true, data: row });
+  } catch (err: any) {
+    return fail(c, err);
+  }
+});
+
+// GET /api/v1/notifications/devices - registered push tokens (NTF-004)
+notificationRoutes.get('/devices', async (c) => {
+  try {
+    const userId = await recipient(c);
+    const devices = await listDevices(userId);
+    return c.json({ success: true, data: { devices, count: devices.length } });
+  } catch (err: any) {
+    return fail(c, err);
+  }
+});
+
+// POST /api/v1/notifications/devices - register FCM/APNs token (NTF-004)
+notificationRoutes.post('/devices', async (c) => {
+  try {
+    const userId = await recipient(c);
+    const body = await c.req.json().catch(() => ({}));
+    const device = await registerDevice(userId, body);
+    return c.json({ success: true, data: device }, 201);
+  } catch (err: any) {
+    return fail(c, err);
+  }
+});
+
+// POST /api/v1/notifications/devices/unregister - deactivate a push token
+notificationRoutes.post('/devices/unregister', async (c) => {
+  try {
+    const userId = await recipient(c);
+    const body = await c.req.json().catch(() => ({}));
+    const token = String(body?.token ?? '');
+    if (!token) {
+      return c.json({ success: false, error: 'token wajib diisi' }, 400);
+    }
+    const device = await unregisterDevice(userId, token);
+    if (!device) {
+      return c.json({ success: false, error: 'Device token tidak ditemukan' }, 404);
+    }
+    return c.json({ success: true, data: device });
   } catch (err: any) {
     return fail(c, err);
   }

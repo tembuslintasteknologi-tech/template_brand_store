@@ -2,6 +2,7 @@ import { db } from '../../db/index.js';
 import { notificationPreferences, notificationTemplates, notifications, users } from '../../db/schema.js';
 import { and, count, desc, eq } from 'drizzle-orm';
 import { recordAdminAction } from '../admin/auditLog.js';
+import { sendPush } from './pushService.js';
 
 export class NotificationError extends Error {
   readonly status: number;
@@ -228,6 +229,7 @@ export async function notify(input: NotifyInput) {
   const deepLink = buildDeepLink(template.deepLinkPattern, input.vars);
 
   const created = [];
+  let push: Awaited<ReturnType<typeof sendPush>> | null = null;
   if (channels.inApp) {
     const [row] = await db
       .insert(notifications)
@@ -245,6 +247,19 @@ export async function notify(input: NotifyInput) {
       })
       .returning();
     created.push(row);
+
+    // Push mirror the in-app feed. Failures are non-fatal: the in-app row is
+    // already persisted so the recipient still sees the notification.
+    try {
+      push = await sendPush(input.userId, title, body, {
+        ...(input.data ?? {}),
+        templateCode: template.code,
+        category: template.category,
+        deepLink: deepLink ?? '',
+      });
+    } catch {
+      push = { sent: false, reason: 'push_error' };
+    }
   }
 
   if (channels.email) {
@@ -267,7 +282,7 @@ export async function notify(input: NotifyInput) {
     created.push(row);
   }
 
-  return { skipped: false, reason: null, created };
+  return { skipped: false, reason: null, created, push };
 }
 
 export async function listNotifications(userId: string, options: { limit?: number; unreadOnly?: boolean } = {}) {

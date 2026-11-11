@@ -1,9 +1,10 @@
 import { Context, Next } from 'hono';
-import { redis } from '../config/redis.js';
+import { getRedisClient } from '../config/redis.js';
 
 // Enterprise Rate Limiter using Redis sliding window / token bucket approximation
 export async function rateLimiterMiddleware(c: Context, next: Next) {
   try {
+    const redis = getRedisClient();
     const ip = c.req.header('x-forwarded-for') || c.req.header('cf-connecting-ip') || '127.0.0.1';
     const key = `ratelimit:${ip}`;
     

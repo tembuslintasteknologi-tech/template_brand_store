@@ -24,6 +24,7 @@ Rekap: lihat bagian **Rekap Progress** di akhir dokumen.
 - [x] Buat Dockerfile dan docker-compose.yml (api, postgres, redis, minio) — Selesai, lengkap dengan minio dan port terverifikasi aman
 - [x] Buat `.env.example` lengkap (termasuk blok BRAND / STORE DEFAULTS)
 - [x] Config loader dengan validasi Zod
+- [x] Pisahkan instruksi agen: global generik plus `AGENTS.md` repo berisi konteks TEMBUS dan path graphify (AGENT-CFG) — aturan graphify di `~/.config/opencode/AGENTS.md` dibuat generik, path khusus dipindah ke `AGENTS.md` repo; bukti di `VERIFY-LOG.md` dan note vault `AGENT-CFG - Agent Instructions Split (2026-11-12)`
 
 ### Database
 - [x] Setup Drizzle ORM + koneksi PostgreSQL — kode + `drizzle.config.ts`; migrasi & seed pernah dijalankan di cluster sementara port 55432 (kredensial `postgres` lokal belum diketahui, lihat `AUDIT-REPORT.md` §6)
@@ -168,16 +169,16 @@ Rekap: lihat bagian **Rekap Progress** di akhir dokumen.
 - [x] Promo & discount engine: kode, limit, periode, minimum belanja (PRM-001..005) — `src/services/promoEngine.ts` + `src/routes/promos.ts`, 15 unit test lulus
 - [x] Promo stackable, auto-apply, segment (PRM-006..008) — engine sudah mendukung stacking, terverifikasi via test: src/tests/promoStacking.test.ts (Lulus: 192/192 total tests) — engine saat ini menerapkan satu promo terbaik per keranjang
 - [x] WebSocket: koneksi + update status order real-time (RTC-001, RTC-002) — diimplementasikan via Server-Sent Events (SSE) di `/api/realtime/orders/:orderId/stream` dengan realtimeHub, terverifikasi via test: src/tests/realtime.test.ts (Lulus: 193/193 total tests)
-- [~] Push notification FCM/APNs (WIP: mock created) [TODO: 1. Integrasi SDK FCM/APNs; 2. Simpan device_token ke tabel users/user_devices; 3. Integrasikan ke notificationService.notify(); 4. Test dengan request nyata; 5. Update vault+graph]
-- [ ] Review & rating: tulis review (verified purchase), helpful
-- [ ] Admin moderasi review + balas review (MOD-001, MOD-002, MOD-005)
-- [ ] Wishlist + notifikasi price drop / back in stock (WSH-001, WSH-004, WSH-005)
+- [x] Push notification FCM/APNs: src/services/notifications/pushService.ts (FCM HTTP v1 + APNs token auth) plus endpoint `GET/POST /api/v1/notifications/devices` dan `POST /api/v1/notifications/devices/unregister`, tersimpan di tabel `user_devices`; `notificationService.notify()` sekarang mirror tiap notifikasi in-app ke push (kegagalan push tidak membatalkan notifikasi in-app). Tanpa `FCM_SERVER_KEY` / `APNS_AUTH_TOKEN` hasilnya `{ sent: false, reason: 'push_not_configured:<provider>' }`. test: src/tests/push.test.ts
+- [x] Review & rating: tulis review (verified purchase), helpful, report: src/services/reviews/reviewService.ts + src/routes/reviews.ts, endpoint `GET/POST /api/v1/products/:productId/reviews`, `POST /api/v1/reviews/:id/helpful`, `POST /api/v1/reviews/:id/report`; satu review per user per produk, tabel baru `review_helpful_votes`. test: src/tests/reviews.test.ts
+- [x] Admin moderasi review + balas review (MOD-001, MOD-002, MOD-005): `GET /api/v1/admin/reviews`, `PATCH /api/v1/admin/reviews/:id/visibility`, `POST /api/v1/admin/reviews/:id/reply`, `GET /api/v1/admin/review-reports`, `POST /api/v1/admin/review-reports/:id/resolve`; setiap aksi masuk audit log
+- [x] Wishlist + notifikasi price drop / back in stock (WSH-001, WSH-004, WSH-005): src/services/wishlist/wishlistService.ts + src/routes/wishlist.ts (`GET/POST /api/v1/wishlist`, `PATCH/DELETE /api/v1/wishlist/:productId`); alert dipicu dari `PATCH /api/v1/admin/products/:id/price`, kolom baru `notify_price_drop`, `notify_back_in_stock`, `last_notified_price`, `last_back_in_stock_notified_at`. test: src/tests/wishlist.test.ts
 - [x] Admin content: banner (CMS-001, CMS-002) dan static pages (PGE-001, PGE-002) — 2026-11-10: `GET/POST /api/v1/admin/banners`, `PATCH/DELETE /api/v1/admin/banners/:id` (jadwal `startAt`/`endAt`, `sortOrder`, `placement`, aktif/nonaktif) dan `GET/POST /api/v1/admin/pages`, `PATCH/DELETE /api/v1/admin/pages/:slug` (draft/publish, validasi slug kebab-case, tolak slug duplikat 409). Semua aksi masuk audit log
-- [ ] Bulk import/export produk (CAT-011)
-- [ ] SEO produk dan halaman (CAT-010, PGE-004)
+- [x] Bulk import/export produk (CAT-011): src/services/catalog/bulkService.ts + endpoint `GET /api/v1/admin/products/export?format=csv|json`, `GET /api/v1/admin/products/import-template`, `POST /api/v1/admin/products/import` (upsert by slug, maksimal 5000 baris, laporan `skipped` per baris). test: src/tests/bulk.test.ts
+- [x] SEO produk dan halaman (CAT-010, PGE-004): src/services/catalog/seoService.ts + `GET /api/v1/products/:slug/seo`, `GET /api/v1/pages/:slug/seo`, `GET /api/v1/admin/products/seo-audit`, `PUT /api/v1/admin/products/:id/seo`; output meta title/description, canonical, JSON-LD Product dan WebPage, plus warning panjang meta. test: src/tests/seo.test.ts
 - [x] COD via Tembus (LOG-007) dan asuransi (LOG-008)
-- [ ] Laporan keuangan dasar (FIN-001)
-- [ ] Notifikasi SMS/OTP provider
+- [x] Laporan keuangan dasar (FIN-001): src/services/finance/financeService.ts + `GET /api/v1/admin/finance/summary?from&to&format=json|csv` (gross, diskon, ongkir, refund, net, AOV, breakdown status dan bulanan). test: src/tests/finance.test.ts
+- [x] Notifikasi SMS/OTP provider: src/services/notifications/smsService.ts (Twilio, Fonnte, fallback log) dipakai `otpService` yang menyimpan kode 6 digit di Redis dengan TTL 300 detik dan menghapus kode setelah verifikasi sukses. test: src/tests/sms.test.ts, src/tests/otp.test.ts. Verifikasi akhir: `npx tsc --noEmit` exit 0, `npm test` 251/251 lulus (194 test lama + 57 test baru)
 
 ---
 

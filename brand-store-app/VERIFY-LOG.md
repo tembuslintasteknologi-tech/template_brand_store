@@ -203,18 +203,34 @@ Catatan:
 Task: BR-SCOPE - rencana Multi Cabang masuk TASK-CHECKLIST.md
 Jenis perubahan: dokumen saja (TASK-CHECKLIST.md). Tidak ada perubahan kode, schema,
 test, atau config di brand-store-app.
+Model yang dipakai (revisi setelah koreksi pemilik produk):
+  - Cabang berperan sebagai penjual di dalam satu brand, bukan hasil auto-routing.
+  - Produk dari cabang tanpa stok tidak ditampilkan, jadi customer hanya bisa memilih
+    cabang yang benar-benar bisa memenuhi.
+  - Jarak antara alamat customer dan cabang yang dipilih menentukan mode pengiriman:
+    di dalam radius ondemand maka opsi ondemand muncul, di luar radius hanya 3PL.
+  - Order dikirim dari cabang yang dipilih. Tidak ada pickup.
+  - Pusat tetap mengelola stoknya sendiri dan mendapat analitik seluruh cabang.
 Isi yang ditambahkan: section "Fase 2.5: Multi Cabang (di luar PRD, terkait INV-007 /
-INV-008)" berisi 16 baris BR-001..BR-016 dan 4 keputusan terbuka (OD-1..OD-4).
+INV-008)" berisi 16 baris BR-001..BR-016, 3 keputusan terbuka (OD-A..OD-C), dan 4
+keputusan yang sudah final.
 Command:
-  git diff --stat
+  git diff --numstat 7b5c8c5 -- TASK-CHECKLIST.md
 Output:
- TASK-CHECKLIST.md | 34 ++++++++++++++++++++++++++++++++++
- 1 file changed, 34 insertions(+)
+50	0	TASK-CHECKLIST.md
 Command:
-  git status --porcelain -- brand-store-app
+  git status --porcelain -- brand-store-app/src
 Output:
 (empty)
+Command:
+  Select-String -Path "src\services\logistics\logisticProvider.ts" -Pattern "latitude"
+Output:
+  Line 20:   latitude?: number;
+  Line 21:   longitude?: number;
 Catatan:
-  Graph tidak di-rebuild karena tidak ada node atau edge baru di brand-store-app.
-  Bukti: `git status --porcelain -- brand-store-app` kosong, jadi isi graph.json
-  yang terakhir (703 nodes / 1593 edges) masih mewakili kode saat ini.
+  - Kontrak logistik yang dipakai sudah ada: RateCalculationParams menerima
+    origin/destination latitude+longitude, tembusOnDemandProvider mengembalikan
+    distance_km, tembusAggregatorProvider memakai carrier default jne dan jnt.
+  - Graph tidak di-rebuild karena tidak ada node atau edge baru di brand-store-app.
+    Bukti: `git status --porcelain -- brand-store-app` kosong, jadi isi graph.json
+    yang terakhir (703 nodes / 1593 edges) masih mewakili kode saat ini.

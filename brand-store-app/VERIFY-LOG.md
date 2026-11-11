@@ -165,3 +165,35 @@ PASS 401 /api/v1/admin/products/seo-audit
 PASS 404 /api/v1/this-route-does-not-exist
 ALL_ROUTES_REGISTERED
 Catatan: 500 pada endpoint publik berasal dari kredensial PostgreSQL lokal yang belum tersedia, bukan route yang tidak termount.
+
+---
+2026-11-12 (lanjutan)
+Task: Push main + sanitasi secret di graph.json
+Temuan: push pertama ditolak GitHub secret scanning. `brand-store-app/.engram/graph.json`
+menyimpan remote URL lengkap di `graph.provenance.source_id`, termasuk token akses repo
+(token muncul 757 kali, bukan 757 secret berbeda, hanya string yang sama berulang).
+Akar masalah: `engram` menyalin `git remote get-url origin`, dan URL remote saat itu
+memuat token di dalamnya.
+Tindakan:
+  1. Sanitasi graph.json: semua `ghp_[A-Za-z0-9]{20,}` diganti `REDACTED`. JSON tetap valid,
+     nodes 703 dan edges 1593 tidak berubah.
+  2. `git remote set-url origin https://github.com/tembuslintasteknologi-tech/template_brand_store.git`
+     supaya rebuild berikutnya tidak menyalin token lagi.
+  3. Amend commit Phase 2 dengan graph.json yang sudah bersih.
+  4. Push ulang.
+Command:
+  git grep -c "ghp_" HEAD
+  git ls-remote origin refs/heads/main
+Output:
+no ghp_ occurrences in HEAD tree
+remote ref: decf0ae1e0d8345e838dc1cfe3544b522bfd6958	refs/heads/main
+local HEAD: decf0ae1e0d8345e838dc1cfe3544b522bfd6958
+Push result:
+   e4d31c7..decf0ae  main -> main
+Catatan:
+  - Remote history bersih. Versi commit yang masih memuat token tidak pernah masuk remote
+    karena push pertama ditolak.
+  - Token yang sama masih ada di objek git lokal (commit hasil amend) sampai gc, dan
+    sebaiknya dirotasi karena sudah tampil di output terminal sesi ini.
+  - Remote URL sekarang bersih, jadi `graphify update` berikutnya akan menulis
+    provenance tanpa token.

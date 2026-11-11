@@ -7,5 +7,7 @@ declare module 'hono' {
       email: string;
       role: 'admin' | 'customer';
     };
+    requestId: string;
   }
 }
+

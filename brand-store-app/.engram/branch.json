@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "branchName": "main",
+  "worktreePath": "E:\\TEMBUS LINTAS TEKNOLOGI\\TEMPLATE WEB MARKETPLACE",
+  "upstream": null,
+  "mergeBase": null,
+  "firstSeenHead": "c81d98781a76eccfcba75d3a15e1fca97c858a92",
+  "lastSeenHead": "c81d98781a76eccfcba75d3a15e1fca97c858a92",
+  "lastAnalyzedHead": "c81d98781a76eccfcba75d3a15e1fca97c858a92",
+  "stale": false,
+  "staleReason": null,
+  "staleSince": null,
+  "lifecycleEvent": null,
+  "createdAt": "2026-11-10T10:05:41.971Z",
+  "updatedAt": "2026-11-11T07:53:16.878Z"
+}

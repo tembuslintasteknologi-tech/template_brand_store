@@ -4,6 +4,7 @@ import { orders, orderItems, products } from '../db/schema.js';
 import { eq, desc } from 'drizzle-orm';
 import { orderSchema } from '../validators/schemas.js';
 import { authMiddleware, adminOnlyMiddleware } from '../middleware/auth.js';
+import { notifyOrderEvent } from '../services/notifications/orderNotifications.js';
 
 export const orderRoutes = new Hono();
 
@@ -61,6 +62,9 @@ orderRoutes.post('/', authMiddleware, async (c) => {
         ...itemData,
       });
     }
+
+    // fire-and-forget notification (NTF-001, NTF-003)
+    notifyOrderEvent(user.id, 'created', { orderNumber, totalAmount: totalAmount.toString() }).catch(() => {});
 
     return c.json({ success: true, data: { orderId: newOrder.id, orderNumber, totalAmount, status: 'pending' } }, 201);
   } catch (err: any) {

@@ -6,7 +6,10 @@ import { productRoutes } from './routes/products.js';
 import { orderRoutes } from './routes/orders.js';
 import { analyticsRoutes } from './routes/analytics.js';
 import { promoRoutes } from './routes/promos.js';
-import { rateLimiterMiddleware } from './middleware/rateLimiter.js';
+import { paymentRoutes } from './routes/payments.js';
+import { notificationRoutes, notificationAdminRoutes } from './routes/notifications.js';
+import { realtimeRoutes } from './routes/realtime.js';
+import { securityHeadersMiddleware } from './middleware/security.js';
 
 const app = new Hono();
 
@@ -17,16 +20,7 @@ app.use('*', cors({
   allowHeaders: ['Content-Type', 'Authorization'],
 }));
 
-// Enterprise Distributed Rate Limiter
-app.use('*', rateLimiterMiddleware);
-
-app.use('*', async (c, next) => {
-  c.header('X-Content-Type-Options', 'nosniff');
-  c.header('X-Frame-Options', 'DENY');
-  c.header('X-XSS-Protection', '1; mode=block');
-  c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-  await next();
-});
+app.use('*', securityHeadersMiddleware());
 
 // Health check
 app.get('/health', (c) => c.json({ status: 'healthy', service: 'brand-store-api', timestamp: new Date().toISOString() }));
@@ -37,6 +31,10 @@ app.route('/api/products', productRoutes);
 app.route('/api/orders', orderRoutes);
 app.route('/api/admin', analyticsRoutes);
 app.route('/api/promos', promoRoutes);
+app.route('/api/payments', paymentRoutes);
+app.route('/api/notifications', notificationRoutes);
+app.route('/api/admin', notificationAdminRoutes);
+app.route('/api/realtime', realtimeRoutes);
 
 // 404 handler
 app.notFound((c) => c.json({ success: false, error: 'Endpoint not found' }, 404));
@@ -53,3 +51,4 @@ export default {
 };
 
 console.log(`🚀 Brand Store API server running on port ${unifiedConfig.port}`);
+

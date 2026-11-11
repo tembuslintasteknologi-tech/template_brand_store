@@ -4,6 +4,7 @@ import { users } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import argon2 from 'argon2';
 import { registerSchema, loginSchema } from '../validators/schemas.js';
+import { fail } from '../utils/response.js';
 
 export const authRoutes = new Hono();
 
@@ -12,7 +13,7 @@ authRoutes.post('/register', async (c) => {
     const body = await c.req.json();
     const parsed = registerSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json({ success: false, error: parsed.error.format() }, 400);
+      return fail(c, 'VALIDATION_ERROR', 'Validation failed', 400, parsed.error.issues);
     }
 
     const { email, password, fullName, phone } = parsed.data;
@@ -49,7 +50,7 @@ authRoutes.post('/login', async (c) => {
     const body = await c.req.json();
     const parsed = loginSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json({ success: false, error: parsed.error.format() }, 400);
+      return fail(c, 'VALIDATION_ERROR', 'Validation failed', 400, parsed.error.issues);
     }
 
     const { email, password } = parsed.data;

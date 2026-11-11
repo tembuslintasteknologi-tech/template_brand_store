@@ -1,5 +1,5 @@
 import { defineConfig } from 'drizzle-kit';
-import { unifiedConfig } from './src/config/unifiedConfig';
+import { unifiedConfig } from './src/config/unifiedConfig.js';
 
 export default defineConfig({
   schema: './src/db/schema.ts',

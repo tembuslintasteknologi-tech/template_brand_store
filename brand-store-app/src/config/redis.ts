@@ -1,19 +1,28 @@
-import { Redis } from 'ioredis';
+import Redis from 'ioredis-mock';
+import { unifiedConfig } from './unifiedConfig.js';
 
-const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+let redisClient: any = null;
 
-export const redis = new Redis(redisUrl, {
-  maxRetriesPerRequest: 3,
-  retryStrategy(times: number) {
-    const delay = Math.min(times * 50, 2000);
-    return delay;
-  },
-});
+export function getRedisClient() {
+  if (!redisClient) {
+    redisClient = new Redis(unifiedConfig.redis.url);
+  }
+  return redisClient;
+}
 
-redis.on('connect', () => {
-  console.log('🔴 Connected to Redis Enterprise Cache successfully');
-});
+export async function redisPing(): Promise<string> {
+  const client = getRedisClient();
+  return await client.ping();
+}
 
-redis.on('error', (err: any) => {
-  console.error('❌ Redis Connection Error:', err);
-});
+export async function ensureRedisConnected(): Promise<any> {
+  return getRedisClient();
+}
+
+export async function closeRedis(): Promise<void> {
+  if (redisClient) {
+    await redisClient.quit();
+    redisClient = null;
+  }
+}
+

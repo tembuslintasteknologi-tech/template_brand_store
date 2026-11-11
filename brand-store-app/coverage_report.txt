@@ -1,0 +1,1227 @@
+TAP version 13
+# Subtest: escapeCsvValue quotes commas, quotes and newlines
+ok 1 - escapeCsvValue quotes commas, quotes and newlines
+  ---
+  duration_ms: 1.6131
+  type: 'test'
+  ...
+# Subtest: buildCsv writes a header row and one line per record
+ok 2 - buildCsv writes a header row and one line per record
+  ---
+  duration_ms: 0.3678
+  type: 'test'
+  ...
+# Subtest: buildExport produces a BOM csv file name and json payload
+ok 3 - buildExport produces a BOM csv file name and json payload
+  ---
+  duration_ms: 1.6932
+  type: 'test'
+  ...
+# Subtest: unsupportedFormatError explains which formats exist
+ok 4 - unsupportedFormatError explains which formats exist
+  ---
+  duration_ms: 0.1792
+  type: 'test'
+  ...
+# Subtest: fillDailySeries fills missing days with zero and keeps order
+ok 5 - fillDailySeries fills missing days with zero and keeps order
+  ---
+  duration_ms: 1.3115
+  type: 'test'
+  ...
+# Subtest: classifyStock separates critical, warning and ok
+ok 6 - classifyStock separates critical, warning and ok
+  ---
+  duration_ms: 0.1675
+  type: 'test'
+  ...
+# Subtest: isUuid rejects mock actor identifiers so audit rows never fail on cast
+ok 7 - isUuid rejects mock actor identifiers so audit rows never fail on cast
+  ---
+  duration_ms: 0.3554
+  type: 'test'
+  ...
+# [HTTP] GET http://localhost/health - 200 (39ms)
+# [HTTP] GET http://localhost/api/v1/does-not-exist - 404 (2ms)
+# [HTTP] POST http://localhost/api/auth/login - 404 (0ms)
+# [HTTP] GET http://localhost/api/v1/orders/my-orders - 401 (1ms)
+# [HTTP] GET http://localhost/api/v1/admin/dashboard - 403 (3ms)
+# [HTTP] GET http://localhost/api/v1/admin/dashboard - 401 (1ms)
+# [HTTP] POST http://localhost/api/v1/auth/login - 400 (4ms)
+# Subtest: app wiring
+    # Subtest: serves /health with per-dependency checks
+    ok 1 - serves /health with per-dependency checks
+      ---
+      duration_ms: 134.2168
+      type: 'test'
+      ...
+    # Subtest: returns a structured 404 for unknown routes
+    ok 2 - returns a structured 404 for unknown routes
+      ---
+      duration_ms: 3.2025
+      type: 'test'
+      ...
+    # Subtest: keeps the legacy /api prefix unmounted so clients use /api/v1
+    ok 3 - keeps the legacy /api prefix unmounted so clients use /api/v1
+      ---
+      duration_ms: 1.4054
+      type: 'test'
+      ...
+    # Subtest: requires authentication on protected v1 routes
+    ok 4 - requires authentication on protected v1 routes
+      ---
+      duration_ms: 1.7855
+      type: 'test'
+      ...
+    # Subtest: rejects customer tokens on the admin route group with 403
+    ok 5 - rejects customer tokens on the admin route group with 403
+      ---
+      duration_ms: 7.0856
+      type: 'test'
+      ...
+    # Subtest: rejects an invalid bearer token on the admin route group with 401
+    ok 6 - rejects an invalid bearer token on the admin route group with 401
+      ---
+      duration_ms: 1.2969
+      type: 'test'
+      ...
+    # Subtest: validates the login payload before touching the database
+    ok 7 - validates the login payload before touching the database
+      ---
+      duration_ms: 5.2402
+      type: 'test'
+      ...
+# [HTTP] POST http://localhost/api/v1/promos/validate - 400 (37ms)
+# [HTTP] GET http://localhost/nope - 404 (1ms)
+# [HTTP] POST http://localhost/api/v1/checkout/legacy-process - 404 (0ms)
+    # Subtest: validates the promo payload before touching the database
+    ok 8 - validates the promo payload before touching the database
+      ---
+      duration_ms: 38.5354
+      type: 'test'
+      ...
+    # Subtest: always echoes the correlation id on errors
+    ok 9 - always echoes the correlation id on errors
+      ---
+      duration_ms: 1.3178
+      type: 'test'
+      ...
+    # Subtest: returns 404 for the legacy /checkout endpoint that was never implemented
+    ok 10 - returns 404 for the legacy /checkout endpoint that was never implemented
+      ---
+      duration_ms: 1.2989
+      type: 'test'
+      ...
+    1..10
+ok 8 - app wiring
+  ---
+  duration_ms: 197.4102
+  type: 'suite'
+  ...
+# Subtest: JWT core
+    # Subtest: signs and verifies an access token
+    ok 1 - signs and verifies an access token
+      ---
+      duration_ms: 11.7291
+      type: 'test'
+      ...
+    # Subtest: uses a 15 minute access token and 7 day refresh token lifetime
+    ok 2 - uses a 15 minute access token and 7 day refresh token lifetime
+      ---
+      duration_ms: 1.9759
+      type: 'test'
+      ...
+    # Subtest: rejects a tampered signature
+    ok 3 - rejects a tampered signature
+      ---
+      duration_ms: 1.5173
+      type: 'test'
+      ...
+    # Subtest: rejects a token signed with the refresh secret when used as access token
+    ok 4 - rejects a token signed with the refresh secret when used as access token
+      ---
+      duration_ms: 1.1283
+      type: 'test'
+      ...
+    # Subtest: rejects an expired token
+    ok 5 - rejects an expired token
+      ---
+      duration_ms: 1.3043
+      type: 'test'
+      ...
+    # Subtest: rejects malformed tokens
+    ok 6 - rejects malformed tokens
+      ---
+      duration_ms: 0.3838
+      type: 'test'
+      ...
+    # Subtest: keeps the legacy signJwt helper usable
+    ok 7 - keeps the legacy signJwt helper usable
+      ---
+      duration_ms: 1.0327
+      type: 'test'
+      ...
+    1..7
+ok 9 - JWT core
+  ---
+  duration_ms: 21.763
+  type: 'suite'
+  ...
+# Subtest: authMiddleware
+    # Subtest: returns 401 without an Authorization header
+    ok 1 - returns 401 without an Authorization header
+      ---
+      duration_ms: 52.5298
+      type: 'test'
+      ...
+    # Subtest: returns 401 for a malformed token
+    ok 2 - returns 401 for a malformed token
+      ---
+      duration_ms: 1.4676
+      type: 'test'
+      ...
+    # Subtest: exposes the authenticated user for a valid token
+    ok 3 - exposes the authenticated user for a valid token
+      ---
+      duration_ms: 13.595
+      type: 'test'
+      ...
+    # Subtest: rejects a revoked token
+    ok 4 - rejects a revoked token
+      ---
+      duration_ms: 4.5953
+      type: 'test'
+      ...
+    1..4
+ok 10 - authMiddleware
+  ---
+  duration_ms: 72.773
+  type: 'suite'
+  ...
+# Subtest: role guards
+    # Subtest: adminOnlyMiddleware returns 403 for customers and 200 for admins
+    ok 1 - adminOnlyMiddleware returns 403 for customers and 200 for admins
+      ---
+      duration_ms: 4.7401
+      type: 'test'
+      ...
+    # Subtest: requireRole accepts listed roles only
+    ok 2 - requireRole accepts listed roles only
+      ---
+      duration_ms: 4.2018
+      type: 'test'
+      ...
+    1..2
+ok 11 - role guards
+  ---
+  duration_ms: 9.3484
+  type: 'suite'
+  ...
+# Subtest: validateSetting accepts valid known keys
+ok 12 - validateSetting accepts valid known keys
+  ---
+  duration_ms: 6.3154
+  type: 'test'
+  ...
+# Subtest: validateSetting rejects out of range tax and expiry
+ok 13 - validateSetting rejects out of range tax and expiry
+  ---
+  duration_ms: 2.9609
+  type: 'test'
+  ...
+# Subtest: validateSetting rejects bad key names and non object values for unknown keys
+ok 14 - validateSetting rejects bad key names and non object values for unknown keys
+  ---
+  duration_ms: 0.5069
+  type: 'test'
+  ...
+# Subtest: brandProfileSchema requires a name and validates contact email
+ok 15 - brandProfileSchema requires a name and validates contact email
+  ---
+  duration_ms: 1.6594
+  type: 'test'
+  ...
+# Subtest: featureFlagsSchema only accepts boolean values
+ok 16 - featureFlagsSchema only accepts boolean values
+  ---
+  duration_ms: 0.6589
+  type: 'test'
+  ...
+# Subtest: pickDefaultLocation prefers an active default location
+ok 17 - pickDefaultLocation prefers an active default location
+  ---
+  duration_ms: 0.3274
+  type: 'test'
+  ...
+# Subtest: shouldBlockForMaintenance keeps admin, auth, health and webhooks reachable
+ok 18 - shouldBlockForMaintenance keeps admin, auth, health and webhooks reachable
+  ---
+  duration_ms: 0.406
+  type: 'test'
+  ...
+# Subtest: validateSetting accepts maintenance.mode and rejects wrong shape
+ok 19 - validateSetting accepts maintenance.mode and rejects wrong shape
+  ---
+  duration_ms: 0.4812
+  type: 'test'
+  ...
+# Subtest: Cart & Checkout Service
+    # Subtest: manage cart items and clear cart (CRT-001)
+    ok 1 - manage cart items and clear cart (CRT-001)
+      ---
+      duration_ms: 3.3703
+      type: 'test'
+      ...
+    # Subtest: guest cart session and merge on login (CRT-002, CRT-003)
+    ok 2 - guest cart session and merge on login (CRT-002, CRT-003)
+      ---
+      duration_ms: 0.5943
+      type: 'test'
+      ...
+    # Subtest: quote cart with promo, tax, and shipping calculation (CRT-006)
+    ok 3 - quote cart with promo, tax, and shipping calculation (CRT-006)
+      ---
+      duration_ms: 2.689
+      type: 'test'
+      ...
+    # Subtest: calculate shipping rates
+    ok 4 - calculate shipping rates
+      ---
+      duration_ms: 122.6055
+      type: 'test'
+      ...
+    1..4
+ok 20 - Cart & Checkout Service
+  ---
+  duration_ms: 132.786
+  type: 'test'
+  ...
+# [HTTP] POST http://localhost/api/v1/checkout/quote - 200 (40ms)
+# Subtest: Checkout API Endpoints
+    # Subtest: POST /api/v1/checkout/quote
+    ok 1 - POST /api/v1/checkout/quote
+      ---
+      duration_ms: 131.0315
+      type: 'test'
+      ...
+# [HTTP] POST http://localhost/api/v1/checkout/shipping-rates - 200 (31ms)
+    # Subtest: POST /api/v1/checkout/shipping-rates
+    ok 2 - POST /api/v1/checkout/shipping-rates
+      ---
+      duration_ms: 32.3108
+      type: 'test'
+      ...
+# [HTTP] POST http://localhost/api/v1/checkout/process - 200 (34ms)
+# [HTTP] GET http://localhost/api/v1/checkout/mock-order-id-1794368479053/status - 200 (41ms)
+    # Subtest: POST /api/v1/checkout/process and GET status
+    ok 3 - POST /api/v1/checkout/process and GET status
+      ---
+      duration_ms: 77.466
+      type: 'test'
+      ...
+    1..3
+ok 21 - Checkout API Endpoints
+  ---
+  duration_ms: 243.4332
+  type: 'test'
+  ...
+# Subtest: unifiedConfig
+    # Subtest: exposes runtime settings
+    ok 1 - exposes runtime settings
+      ---
+      duration_ms: 2.0007
+      type: 'test'
+      ...
+    # Subtest: exposes database and redis connection strings
+    ok 2 - exposes database and redis connection strings
+      ---
+      duration_ms: 1.4405
+      type: 'test'
+      ...
+    # Subtest: exposes jwt secrets and required lifetimes
+    ok 3 - exposes jwt secrets and required lifetimes
+      ---
+      duration_ms: 0.5983
+      type: 'test'
+      ...
+    # Subtest: exposes brute force protection settings
+    ok 4 - exposes brute force protection settings
+      ---
+      duration_ms: 0.2836
+      type: 'test'
+      ...
+    # Subtest: exposes brand and store origin defaults
+    ok 5 - exposes brand and store origin defaults
+      ---
+      duration_ms: 0.3256
+      type: 'test'
+      ...
+    # Subtest: exposes tembus, midtrans and storage integrations
+    ok 6 - exposes tembus, midtrans and storage integrations
+      ---
+      duration_ms: 0.4868
+      type: 'test'
+      ...
+    1..6
+ok 22 - unifiedConfig
+  ---
+  duration_ms: 7.8789
+  type: 'suite'
+  ...
+# Subtest: isBannerLive honours the active flag and the schedule window
+ok 23 - isBannerLive honours the active flag and the schedule window
+  ---
+  duration_ms: 2.3537
+  type: 'test'
+  ...
+# Subtest: sortBanners orders by sortOrder then createdAt
+ok 24 - sortBanners orders by sortOrder then createdAt
+  ---
+  duration_ms: 20.5829
+  type: 'test'
+  ...
+# Subtest: bannerSchema requires a title and an image url
+ok 25 - bannerSchema requires a title and an image url
+  ---
+  duration_ms: 4.786
+  type: 'test'
+  ...
+# Subtest: isPagePublic only allows published pages
+ok 26 - isPagePublic only allows published pages
+  ---
+  duration_ms: 0.3328
+  type: 'test'
+  ...
+# Subtest: pageSchema enforces slug format and required content
+ok 27 - pageSchema enforces slug format and required content
+  ---
+  duration_ms: 1.5602
+  type: 'test'
+  ...
+# Subtest: SLUG_PATTERN accepts kebab case only
+ok 28 - SLUG_PATTERN accepts kebab case only
+  ---
+  duration_ms: 0.2576
+  type: 'test'
+  ...
+# Subtest: ContentError carries an HTTP status
+ok 29 - ContentError carries an HTTP status
+  ---
+  duration_ms: 0.3465
+  type: 'test'
+  ...
+# Subtest: Database Schema Verification: All Required Tables and Columns Defined
+    # Subtest: users, user_sessions, user_addresses schemas exist
+    ok 1 - users, user_sessions, user_addresses schemas exist
+      ---
+      duration_ms: 1.4333
+      type: 'test'
+      ...
+    # Subtest: categories, products, product_variants, product_images schemas exist
+    ok 2 - categories, products, product_variants, product_images schemas exist
+      ---
+      duration_ms: 0.3627
+      type: 'test'
+      ...
+    # Subtest: carts and cart_items schemas exist
+    ok 3 - carts and cart_items schemas exist
+      ---
+      duration_ms: 0.4004
+      type: 'test'
+      ...
+    # Subtest: orders, order_items, order_logs schemas exist
+    ok 4 - orders, order_items, order_logs schemas exist
+      ---
+      duration_ms: 0.1785
+      type: 'test'
+      ...
+    # Subtest: payments, payment_webhooks, refunds schemas exist
+    ok 5 - payments, payment_webhooks, refunds schemas exist
+      ---
+      duration_ms: 0.1625
+      type: 'test'
+      ...
+    # Subtest: shipments and shipment_tracking schemas exist
+    ok 6 - shipments and shipment_tracking schemas exist
+      ---
+      duration_ms: 0.1802
+      type: 'test'
+      ...
+    # Subtest: promos, promo_usages, flash_sales, flash_sale_items schemas exist
+    ok 7 - promos, promo_usages, flash_sales, flash_sale_items schemas exist
+      ---
+      duration_ms: 0.1996
+      type: 'test'
+      ...
+    # Subtest: reviews with admin_reply columns exists
+    ok 8 - reviews with admin_reply columns exists
+      ---
+      duration_ms: 0.1785
+      type: 'test'
+      ...
+    # Subtest: wallets and wallet_transactions schemas exist
+    ok 9 - wallets and wallet_transactions schemas exist
+      ---
+      duration_ms: 0.1533
+      type: 'test'
+      ...
+    # Subtest: notifications, notification_templates, notification_preferences exist
+    ok 10 - notifications, notification_templates, notification_preferences exist
+      ---
+      duration_ms: 0.1711
+      type: 'test'
+      ...
+    # Subtest: wishlists, order_disputes, review_reports schemas exist
+    ok 11 - wishlists, order_disputes, review_reports schemas exist
+      ---
+      duration_ms: 0.1477
+      type: 'test'
+      ...
+    # Subtest: drizzle migration 0006 file exists and journal is updated
+    ok 12 - drizzle migration 0006 file exists and journal is updated
+      ---
+      duration_ms: 0.7617
+      type: 'test'
+      ...
+    1..12
+ok 30 - Database Schema Verification: All Required Tables and Columns Defined
+  ---
+  duration_ms: 7.7853
+  type: 'test'
+  ...
+# Subtest: Inventory Service
+    # Subtest: exports inventory service functions
+    ok 1 - exports inventory service functions
+      ---
+      duration_ms: 1.2889
+      type: 'test'
+      ...
+    1..1
+ok 31 - Inventory Service
+  ---
+  duration_ms: 3.149
+  type: 'suite'
+  ...
+# Subtest: ESLint and Prettier setup check
+ok 32 - ESLint and Prettier setup check
+  ---
+  duration_ms: 2.4395
+  type: 'test'
+  ...
+# Subtest: loginGuard
+    # Subtest: starts unlocked
+    ok 1 - starts unlocked
+      ---
+      duration_ms: 16.9207
+      type: 'test'
+      ...
+    # Subtest: locks after 5 consecutive failures
+    ok 2 - locks after 5 consecutive failures
+      ---
+      duration_ms: 2.3966
+      type: 'test'
+      ...
+    # Subtest: clears failures after a successful login
+    ok 3 - clears failures after a successful login
+      ---
+      duration_ms: 0.917
+      type: 'test'
+      ...
+    1..3
+ok 33 - loginGuard
+  ---
+  duration_ms: 22.8729
+  type: 'suite'
+  ...
+# Subtest: normalizeShipmentStatus maps known raw statuses and falls back to created
+ok 34 - normalizeShipmentStatus maps known raw statuses and falls back to created
+  ---
+  duration_ms: 3.7943
+  type: 'test'
+  ...
+# Subtest: shipmentStatusToOrderStatus maps shipment states onto order states
+ok 35 - shipmentStatusToOrderStatus maps shipment states onto order states
+  ---
+  duration_ms: 0.4163
+  type: 'test'
+  ...
+# Subtest: isTerminalShipmentStatus only for delivered, cancelled and returned
+ok 36 - isTerminalShipmentStatus only for delivered, cancelled and returned
+  ---
+  duration_ms: 0.258
+  type: 'test'
+  ...
+# Subtest: maxDays reads the largest day number from the estimate string
+ok 37 - maxDays reads the largest day number from the estimate string
+  ---
+  duration_ms: 0.4425
+  type: 'test'
+  ...
+# Subtest: aggregator compares rates across providers sorted by cost
+ok 38 - aggregator compares rates across providers sorted by cost
+  ---
+  duration_ms: 2.5364
+  type: 'test'
+  ...
+# Subtest: aggregator picks cheapest and fastest available service
+ok 39 - aggregator picks cheapest and fastest available service
+  ---
+  duration_ms: 0.7818
+  type: 'test'
+  ...
+# Subtest: aggregator keeps going when one provider fails (failover)
+ok 40 - aggregator keeps going when one provider fails (failover)
+  ---
+  duration_ms: 0.4781
+  type: 'test'
+  ...
+# Subtest: aggregator throws when every provider fails
+ok 41 - aggregator throws when every provider fails
+  ---
+  duration_ms: 1.1413
+  type: 'test'
+  ...
+# Subtest: aggregator resolves tracking across providers and rejects unknown provider
+ok 42 - aggregator resolves tracking across providers and rejects unknown provider
+  ---
+  duration_ms: 0.7583
+  type: 'test'
+  ...
+# Subtest: aggregator registers providers and lists their names
+ok 43 - aggregator registers providers and lists their names
+  ---
+  duration_ms: 0.4261
+  type: 'test'
+  ...
+# Subtest: resolveDeliveryFailure maps admin actions to shipment and order status
+ok 44 - resolveDeliveryFailure maps admin actions to shipment and order status
+  ---
+  duration_ms: 0.3003
+  type: 'test'
+  ...
+# Subtest: renderTemplate replaces placeholders correctly
+ok 45 - renderTemplate replaces placeholders correctly
+  ---
+  duration_ms: 1.9866
+  type: 'test'
+  ...
+# Subtest: buildDeepLink formats relative patterns correctly
+ok 46 - buildDeepLink formats relative patterns correctly
+  ---
+  duration_ms: 0.4939
+  type: 'test'
+  ...
+# Subtest: decideChannels honors user preferences and template channel
+ok 47 - decideChannels honors user preferences and template channel
+  ---
+  duration_ms: 1.8124
+  type: 'test'
+  ...
+# Subtest: templateForOrderEvent maps events correctly
+ok 48 - templateForOrderEvent maps events correctly
+  ---
+  duration_ms: 0.3791
+  type: 'test'
+  ...
+# Subtest: orderNumber
+    # Subtest: formats an order number as INV/YYYY/MM/NNNNNN
+    ok 1 - formats an order number as INV/YYYY/MM/NNNNNN
+      ---
+      duration_ms: 1.6563
+      type: 'test'
+      ...
+    # Subtest: pads the sequence to six digits
+    ok 2 - pads the sequence to six digits
+      ---
+      duration_ms: 0.2948
+      type: 'test'
+      ...
+    # Subtest: rejects non positive sequences
+    ok 3 - rejects non positive sequences
+      ---
+      duration_ms: 0.9564
+      type: 'test'
+      ...
+    # Subtest: exposes the monthly prefix
+    ok 4 - exposes the monthly prefix
+      ---
+      duration_ms: 0.2411
+      type: 'test'
+      ...
+    # Subtest: round trips through parseOrderNumber
+    ok 5 - round trips through parseOrderNumber
+      ---
+      duration_ms: 1.7663
+      type: 'test'
+      ...
+    # Subtest: returns null for unknown formats
+    ok 6 - returns null for unknown formats
+      ---
+      duration_ms: 0.2944
+      type: 'test'
+      ...
+    1..6
+ok 49 - orderNumber
+  ---
+  duration_ms: 7.5308
+  type: 'suite'
+  ...
+# Subtest: order state machine
+    # Subtest: allows the happy path pending -> paid -> processing -> shipped -> delivered
+    ok 1 - allows the happy path pending -> paid -> processing -> shipped -> delivered
+      ---
+      duration_ms: 2.0017
+      type: 'test'
+      ...
+    # Subtest: allows cancelling an unpaid order
+    ok 2 - allows cancelling an unpaid order
+      ---
+      duration_ms: 0.2946
+      type: 'test'
+      ...
+    # Subtest: blocks skipping states
+    ok 3 - blocks skipping states
+      ---
+      duration_ms: 0.1716
+      type: 'test'
+      ...
+    # Subtest: blocks moving backwards
+    ok 4 - blocks moving backwards
+      ---
+      duration_ms: 0.1392
+      type: 'test'
+      ...
+    # Subtest: treats closed orders as terminal
+    ok 5 - treats closed orders as terminal
+      ---
+      duration_ms: 1.4109
+      type: 'test'
+      ...
+    # Subtest: reports transition reasons
+    ok 6 - reports transition reasons
+      ---
+      duration_ms: 0.5698
+      type: 'test'
+      ...
+    # Subtest: recognises known statuses only
+    ok 7 - recognises known statuses only
+      ---
+      duration_ms: 0.1852
+      type: 'test'
+      ...
+    1..7
+ok 50 - order state machine
+  ---
+  duration_ms: 7.2563
+  type: 'suite'
+  ...
+# Subtest: Payment Gateway Manager registers and returns providers
+ok 51 - Payment Gateway Manager registers and returns providers
+  ---
+  duration_ms: 3.184
+  type: 'test'
+  ...
+# Subtest: Midtrans sends a real Snap API request and maps the response
+ok 52 - Midtrans sends a real Snap API request and maps the response
+  ---
+  duration_ms: 106.8347
+  type: 'test'
+  ...
+# Subtest: Midtrans maps enabled payments for qris, gopay and card
+ok 53 - Midtrans maps enabled payments for qris, gopay and card
+  ---
+  duration_ms: 39.0411
+  type: 'test'
+  ...
+# Subtest: Midtrans raises PaymentGatewayError when the gateway rejects the transaction
+ok 54 - Midtrans raises PaymentGatewayError when the gateway rejects the transaction
+  ---
+  duration_ms: 18.876
+  type: 'test'
+  ...
+# Subtest: Midtrans webhook signature uses sha512 of order, status, amount and server key
+ok 55 - Midtrans webhook signature uses sha512 of order, status, amount and server key
+  ---
+  duration_ms: 1.2396
+  type: 'test'
+  ...
+# Subtest: Midtrans webhook honours the explicit insecure flag only
+ok 56 - Midtrans webhook honours the explicit insecure flag only
+  ---
+  duration_ms: 0.4975
+  type: 'test'
+  ...
+# Subtest: Midtrans parses expire and deny webhook states
+ok 57 - Midtrans parses expire and deny webhook states
+  ---
+  duration_ms: 0.3811
+  type: 'test'
+  ...
+# Subtest: Xendit provider creates transaction and parses webhook
+ok 58 - Xendit provider creates transaction and parses webhook
+  ---
+  duration_ms: 0.6953
+  type: 'test'
+  ...
+# Subtest: Manual Bank provider creates instructions
+ok 59 - Manual Bank provider creates instructions
+  ---
+  duration_ms: 0.3576
+  type: 'test'
+  ...
+# Subtest: resolvePaymentExpiry adds the configured minutes
+ok 60 - resolvePaymentExpiry adds the configured minutes
+  ---
+  duration_ms: 4.4788
+  type: 'test'
+  ...
+# Subtest: resolvePaymentExpiry tolerates invalid input by returning now
+ok 61 - resolvePaymentExpiry tolerates invalid input by returning now
+  ---
+  duration_ms: 0.1894
+  type: 'test'
+  ...
+# Subtest: isPaymentExpired handles Date, ISO string, null and invalid values
+ok 62 - isPaymentExpired handles Date, ISO string, null and invalid values
+  ---
+  duration_ms: 0.1764
+  type: 'test'
+  ...
+# Subtest: buildExpiredPaymentDetails keeps existing fields and marks the expiry
+ok 63 - buildExpiredPaymentDetails keeps existing fields and marks the expiry
+  ---
+  duration_ms: 0.1805
+  type: 'test'
+  ...
+# Subtest: buildExpiredPaymentDetails handles null and non-object input
+ok 64 - buildExpiredPaymentDetails handles null and non-object input
+  ---
+  duration_ms: 0.9657
+  type: 'test'
+  ...
+# Subtest: evaluatePromo
+    # Subtest: applies a percentage discount
+    ok 1 - applies a percentage discount
+      ---
+      duration_ms: 2.4281
+      type: 'test'
+      ...
+    # Subtest: applies a fixed discount
+    ok 2 - applies a fixed discount
+      ---
+      duration_ms: 0.3795
+      type: 'test'
+      ...
+    # Subtest: caps a percentage discount with maxDiscount
+    ok 3 - caps a percentage discount with maxDiscount
+      ---
+      duration_ms: 0.2814
+      type: 'test'
+      ...
+    # Subtest: never discounts more than the subtotal
+    ok 4 - never discounts more than the subtotal
+      ---
+      duration_ms: 0.2605
+      type: 'test'
+      ...
+    # Subtest: rejects an inactive promo
+    ok 5 - rejects an inactive promo
+      ---
+      duration_ms: 0.2964
+      type: 'test'
+      ...
+    # Subtest: rejects a promo that has not started
+    ok 6 - rejects a promo that has not started
+      ---
+      duration_ms: 0.245
+      type: 'test'
+      ...
+    # Subtest: rejects an expired promo
+    ok 7 - rejects an expired promo
+      ---
+      duration_ms: 0.2716
+      type: 'test'
+      ...
+    # Subtest: rejects when the minimum order amount is not met
+    ok 8 - rejects when the minimum order amount is not met
+      ---
+      duration_ms: 0.2458
+      type: 'test'
+      ...
+    # Subtest: rejects when the usage limit is reached
+    ok 9 - rejects when the usage limit is reached
+      ---
+      duration_ms: 0.2846
+      type: 'test'
+      ...
+    # Subtest: rejects an invalid rule
+    ok 10 - rejects an invalid rule
+      ---
+      duration_ms: 0.247
+      type: 'test'
+      ...
+    1..10
+ok 65 - evaluatePromo
+  ---
+  duration_ms: 7.5845
+  type: 'suite'
+  ...
+# Subtest: computeCartTotals
+    # Subtest: applies discount, tax and shipping in the right order
+    ok 1 - applies discount, tax and shipping in the right order
+      ---
+      duration_ms: 3.9909
+      type: 'test'
+      ...
+    # Subtest: stacks promos without discounting below zero
+    ok 2 - stacks promos without discounting below zero
+      ---
+      duration_ms: 0.4361
+      type: 'test'
+      ...
+    # Subtest: reports rejected promos with reasons
+    ok 3 - reports rejected promos with reasons
+      ---
+      duration_ms: 0.3879
+      type: 'test'
+      ...
+    # Subtest: handles an empty cart
+    ok 4 - handles an empty cart
+      ---
+      duration_ms: 0.2793
+      type: 'test'
+      ...
+    # Subtest: rounds currencies to two decimals
+    ok 5 - rounds currencies to two decimals
+      ---
+      duration_ms: 0.3642
+      type: 'test'
+      ...
+    1..5
+ok 66 - computeCartTotals
+  ---
+  duration_ms: 6.1204
+  type: 'suite'
+  ...
+# Subtest: Response Utils
+    # Subtest: ok() returns formatted success response
+    ok 1 - ok() returns formatted success response
+      ---
+      duration_ms: 1.7223
+      type: 'test'
+      ...
+    # Subtest: fail() returns formatted error response
+    ok 2 - fail() returns formatted error response
+      ---
+      duration_ms: 1.7882
+      type: 'test'
+      ...
+    # Subtest: serverError() calls console.error
+    ok 3 - serverError() calls console.error
+      ---
+      duration_ms: 0.4405
+      type: 'test'
+      ...
+    1..3
+ok 67 - Response Utils
+  ---
+  duration_ms: 6.4766
+  type: 'test'
+  ...
+# Subtest: correlationIdMiddleware
+    # Subtest: generates a correlation id and mirrors it into response headers
+    ok 1 - generates a correlation id and mirrors it into response headers
+      ---
+      duration_ms: 58.2575
+      type: 'test'
+      ...
+    # Subtest: reuses an inbound correlation id
+    ok 2 - reuses an inbound correlation id
+      ---
+      duration_ms: 2.9805
+      type: 'test'
+      ...
+    # Subtest: ignores an oversized inbound correlation id
+    ok 3 - ignores an oversized inbound correlation id
+      ---
+      duration_ms: 4.3949
+      type: 'test'
+      ...
+    1..3
+ok 68 - correlationIdMiddleware
+  ---
+  duration_ms: 68.0092
+  type: 'suite'
+  ...
+# Subtest: securityHeadersMiddleware
+    # Subtest: sets hardening headers
+    ok 1 - sets hardening headers
+      ---
+      duration_ms: 3.0426
+      type: 'test'
+      ...
+    1..1
+ok 69 - securityHeadersMiddleware
+  ---
+  duration_ms: 3.3099
+  type: 'suite'
+  ...
+# Subtest: rate limit rules
+    # Subtest: matches the documented per-scope limits
+    ok 1 - matches the documented per-scope limits
+      ---
+      duration_ms: 0.5226
+      type: 'test'
+      ...
+    # Subtest: derives the client ip from forwarding headers
+    ok 2 - derives the client ip from forwarding headers
+      ---
+      duration_ms: 1.3949
+      type: 'test'
+      ...
+    # Subtest: 429s once the window limit is exhausted
+    ok 3 - 429s once the window limit is exhausted
+      ---
+      duration_ms: 16.3784
+      type: 'test'
+      ...
+    # Subtest: counts requests through the shared Redis store
+    ok 4 - counts requests through the shared Redis store
+      ---
+      duration_ms: 0.7866
+      type: 'test'
+      ...
+    1..4
+ok 70 - rate limit rules
+  ---
+  duration_ms: 19.5077
+  type: 'suite'
+  ...
+# Subtest: Integration Guide §1.3 folder structure verification
+ok 71 - Integration Guide §1.3 folder structure verification
+  ---
+  duration_ms: 3.1405
+  type: 'test'
+  ...
+# Subtest: on-demand quote calls the developer quotes endpoint and maps the estimate
+ok 72 - on-demand quote calls the developer quotes endpoint and maps the estimate
+  ---
+  duration_ms: 138.3781
+  type: 'test'
+  ...
+# Subtest: on-demand shipment quotes then creates an order and returns the order id as AWB
+ok 73 - on-demand shipment quotes then creates an order and returns the order id as AWB
+  ---
+  duration_ms: 30.0421
+  type: 'test'
+  ...
+# Subtest: on-demand tracking maps canonical status and history
+ok 74 - on-demand tracking maps canonical status and history
+  ---
+  duration_ms: 12.2908
+  type: 'test'
+  ...
+# Subtest: on-demand cancel posts to the cancel endpoint
+ok 75 - on-demand cancel posts to the cancel endpoint
+  ---
+  duration_ms: 11.8944
+  type: 'test'
+  ...
+# Subtest: on-demand surfaces gateway failures as LogisticGatewayError
+ok 76 - on-demand surfaces gateway failures as LogisticGatewayError
+  ---
+  duration_ms: 12.6081
+  type: 'test'
+  ...
+# Subtest: on-demand webhook signature is HMAC sha256 over timestamp and raw body
+ok 77 - on-demand webhook signature is HMAC sha256 over timestamp and raw body
+  ---
+  duration_ms: 2.121
+  type: 'test'
+  ...
+# Subtest: aggregator tariff calls the logistics tariff endpoint per carrier
+ok 78 - aggregator tariff calls the logistics tariff endpoint per carrier
+  ---
+  duration_ms: 15.6479
+  type: 'test'
+  ...
+# Subtest: aggregator AWB creation requires a partner credential
+ok 79 - aggregator AWB creation requires a partner credential
+  ---
+  duration_ms: 0.8917
+  type: 'test'
+  ...
+# Subtest: aggregator AWB creation posts the carrier order payload
+ok 80 - aggregator AWB creation posts the carrier order payload
+  ---
+  duration_ms: 12.3181
+  type: 'test'
+  ...
+# Subtest: aggregator label uses the resi render endpoint and pickup stays unsupported
+ok 81 - aggregator label uses the resi render endpoint and pickup stays unsupported
+  ---
+  duration_ms: 0.7214
+  type: 'test'
+  ...
+# Subtest: on-demand pickup scheduling is explicitly unsupported
+ok 82 - on-demand pickup scheduling is explicitly unsupported
+  ---
+  duration_ms: 0.4847
+  type: 'test'
+  ...
+# Subtest: Template repository structure and metadata check
+ok 83 - Template repository structure and metadata check
+  ---
+  duration_ms: 2.3111
+  type: 'test'
+  ...
+# Subtest: tokenService
+    # Subtest: issues an access/refresh pair with the configured lifetimes
+    ok 1 - issues an access/refresh pair with the configured lifetimes
+      ---
+      duration_ms: 6.4409
+      type: 'test'
+      ...
+    # Subtest: rotates the refresh token and revokes the previous one
+    ok 2 - rotates the refresh token and revokes the previous one
+      ---
+      duration_ms: 7.567
+      type: 'test'
+      ...
+    # Subtest: rejects replaying an already rotated refresh token
+    ok 3 - rejects replaying an already rotated refresh token
+      ---
+      duration_ms: 1.7147
+      type: 'test'
+      ...
+    # Subtest: revokes a session from both tokens
+    ok 4 - revokes a session from both tokens
+      ---
+      duration_ms: 1.0356
+      type: 'test'
+      ...
+    # Subtest: ignores malformed tokens during logout
+    ok 5 - ignores malformed tokens during logout
+      ---
+      duration_ms: 0.318
+      type: 'test'
+      ...
+    1..5
+ok 84 - tokenService
+  ---
+  duration_ms: 18.6874
+  type: 'suite'
+  ...
+1..84
+# tests 165
+# suites 15
+# pass 165
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3367.2111
+# start of coverage report
+# ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# file                           | line % | branch % | funcs % | uncovered lines
+# ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# src                            |        |          |         | 
+#  app.ts                        |  96.75 |    62.50 |   75.00 | 110-114
+#  config                        |        |          |         | 
+#   logger.ts                    | 100.00 |   100.00 |   33.33 | 
+#   redis.ts                     | 100.00 |   100.00 |  100.00 | 
+#   unifiedConfig.ts             |  95.24 |    14.29 |  100.00 | 9 12-13 58
+#  db                            |        |          |         | 
+#   index.ts                     | 100.00 |    80.00 |  100.00 | 
+#   promosSchema.ts              | 100.00 |   100.00 |  100.00 | 
+#   schema.ts                    |  99.49 |   100.00 |   38.46 | 28 67 252
+#  middleware                    |        |          |         | 
+#   auth.ts                      |  98.35 |    86.36 |  100.00 | 77 80
+#   featureGate.ts               |  87.88 |    66.67 |  100.00 | 10-13
+#   logging.ts                   | 100.00 |   100.00 |  100.00 | 
+#   maintenance.ts               |  86.96 |    80.00 |   80.00 | 7 19 30-33
+#   security.ts                  |  97.74 |    78.26 |   90.00 | 88-90
+#  routes                        |        |          |         | 
+#   admin.ts                     |  41.89 |   100.00 |   10.00 | 21 24-28 30-39 42-110 112-119 123-129 131-139 141-150 152-161
+#   analytics.ts                 |  54.21 |   100.00 |    0.00 | 10-31 33-53 57-62
+#   auth.ts                      |  58.14 |    50.00 |   50.00 | 10-32 43-55
+#   checkout.ts                  |  69.75 |    35.71 |   30.77 | 17-20 23-33 36-45 47-49 52-60 87 104-110 117-120
+#   config.ts                    |  62.10 |   100.00 |    4.76 | 31 36-38 40-44 47-54 57 60 64-67 70-75 78-80 82-89 91-98 100-102 108-110 112-116 118-121 123-127 130-131 134-138 141-148
+#   content.ts                   |  68.92 |   100.00 |    7.14 | 23-27 30-35 38-43 49 55-57 62 67-69 72-76 80-81 84-89 92-97 100-101
+#   logistics.ts                 |  39.53 |   100.00 |    7.69 | 17-18 21-47 51-53 55-58 61-86 88-134 138-167 172-188 193-224 226-250 253-293 295-297
+#   notifications.ts             |  65.41 |   100.00 |    7.69 | 21 26 31-36 39-43 45-47 49-57 59-64 66-68 78-79 82-86 89-93
+#   orders.ts                    |  46.55 |   100.00 |    0.00 | 10-49 52-59 64-68 70-78
+#   payments.ts                  |  40.94 |   100.00 |    0.00 | 12-23 26-67 74-80 83-130 132-150 154-175
+#   products.ts                  |  45.45 |   100.00 |    0.00 | 7-22 27-34 38-53 56-64 67-77
+#   promos.ts                    |  61.98 |    40.00 |   25.00 | 20-23 28-46 56-66 70 76-86
+#  services                      |        |          |         | 
+#   admin                        |        |          |         | 
+#    alerts.ts                   |  38.79 |   100.00 |   50.00 | 15-80 83-87
+#    auditLog.ts                 |  52.63 |   100.00 |   50.00 | 15-26 29-43
+#    dashboard.ts                |  71.59 |    77.78 |   75.00 | 37-61
+#    reports.ts                  | 100.00 |   100.00 |  100.00 | 
+#    users.ts                    |  36.36 |    75.00 |   22.22 | 11-16 18-46 49-54 62-79 84-86 88-118 121-125
+#   cartService.ts               |  89.94 |    70.37 |  100.00 | 21-33 37-39
+#   config                       |        |          |         | 
+#    settings.ts                 |  68.20 |    87.88 |   60.00 | 92 96-99 105-106 109-120 122-132 135-147 154-158 162-163 175-180 182-185 188-191 194-205
+#    storeLocations.ts           |  35.34 |   100.00 |   16.67 | 19-21 23-40 42-63 67-80 82-99
+#   content                      |        |          |         | 
+#    bannerService.ts            |  59.01 |    82.14 |   57.14 | 51-53 59 61-80 83-116 118-120 122-126
+#    pageService.ts              |  42.75 |   100.00 |   33.33 | 25-29 31-36 40-44 46-67 71-98 100-108
+#   inventoryService.ts          |  30.43 |   100.00 |   20.00 | 8-13 15-41 45-72 75-93
+#   loginGuard.ts                |  82.86 |    71.43 |   88.89 | 13-18 41-44 64-71
+#   logistics                    |        |          |         | 
+#    logisticAggregator.ts       |  93.44 |    77.27 |   90.00 | 20 36 62-63 69-70 75-76
+#    logisticProvider.ts         | 100.00 |   100.00 |  100.00 | 
+#    logisticRegistry.ts         |  50.00 |   100.00 |   33.33 | 8-23 32-36
+#    shipmentService.ts          |  43.18 |   100.00 |   25.00 | 11-71 74-78 82-90
+#    statusMap.ts                |  98.75 |    90.00 |  100.00 | 63
+#    tembusAggregatorProvider.ts |  83.63 |    55.56 |   68.18 | 57-58 62-65 83-84 86-96 156 178 184-185 187-188 192-209 215-226
+#    tembusOnDemandProvider.ts   |  96.21 |    61.84 |   86.96 | 67 79-82 113-114 144-145 161-162 181
+#   notifications                |        |          |         | 
+#    notificationService.ts      |  48.73 |    58.82 |   31.58 | 10-17 63 85-96 102-113 117-124 126-133 138-155 158-210 213-219 223-226 228-239 243-251 254-256 259-285
+#    orderNotifications.ts       |  57.69 |   100.00 |   40.00 | 22-24 27-46 50-59
+#   orderNumber.ts               | 100.00 |   100.00 |  100.00 | 
+#   orderStateMachine.ts         | 100.00 |    86.67 |  100.00 | 
+#   payment                      |        |          |         | 
+#    manualBankProvider.ts       |  80.00 |   100.00 |   66.67 | 16 18-23
+#    midtransProvider.ts         |  94.74 |    69.64 |   85.71 | 36-37 65-67 73 82 86-87
+#    paymentExpiry.ts            |  65.63 |   100.00 |   66.67 | 27-48
+#    paymentManager.ts           |  95.45 |   100.00 |   87.50 | 25-26
+#    xenditProvider.ts           |  78.26 |    50.00 |   85.71 | 16-19 25-30 38-39 42-44
+#   promoEngine.ts               | 100.00 |   100.00 |  100.00 | 
+#   tokenService.ts              | 100.00 |    88.89 |  100.00 | 
+#  tests                         |        |          |         | 
+#   adminCore.test.ts            | 100.00 |   100.00 |  100.00 | 
+#   app.test.ts                  | 100.00 |   100.00 |  100.00 | 
+#   auth.test.ts                 | 100.00 |   100.00 |  100.00 | 
+#   brandConfig.test.ts          | 100.00 |   100.00 |  100.00 | 
+#   cart.test.ts                 | 100.00 |   100.00 |  100.00 | 
+#   checkoutApi.test.ts          | 100.00 |   100.00 |  100.00 | 
+#   config.test.ts               | 100.00 |   100.00 |  100.00 | 
+#   content.test.ts              | 100.00 |   100.00 |  100.00 | 
+#   databaseSchema.test.ts       | 100.00 |   100.00 |  100.00 | 
+#   inventory.test.ts            | 100.00 |   100.00 |  100.00 | 
+#   lintSetup.test.ts            | 100.00 |   100.00 |  100.00 | 
+#   loginGuard.test.ts           | 100.00 |   100.00 |  100.00 | 
+#   logistics.test.ts            |  94.15 |   100.00 |   73.08 | 26-28 30 32-34 41 43-46
+#   notifications.test.ts        | 100.00 |   100.00 |  100.00 | 
+#   orderNumber.test.ts          | 100.00 |   100.00 |  100.00 | 
+#   orderStateMachine.test.ts    | 100.00 |   100.00 |  100.00 | 
+#   payment.test.ts              | 100.00 |    90.00 |  100.00 | 
+#   paymentExpiry.test.ts        | 100.00 |   100.00 |  100.00 | 
+#   promoEngine.test.ts          | 100.00 |   100.00 |  100.00 | 
+#   response.test.ts             | 100.00 |   100.00 |  100.00 | 
+#   security.test.ts             | 100.00 |    95.00 |  100.00 | 
+#   structure.test.ts            | 100.00 |   100.00 |  100.00 | 
+#   tembusLogistics.test.ts      | 100.00 |    85.11 |  100.00 | 
+#   templateRepo.test.ts         | 100.00 |   100.00 |  100.00 | 
+#   tokenService.test.ts         | 100.00 |   100.00 |  100.00 | 
+#  utils                         |        |          |         | 
+#   response.ts                  | 100.00 |    77.78 |  100.00 | 
+#  validators                    |        |          |         | 
+#   schemas.ts                   | 100.00 |   100.00 |  100.00 | 
+# ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# all files                      |  77.85 |    82.28 |   69.89 | 
+# ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# end of coverage report

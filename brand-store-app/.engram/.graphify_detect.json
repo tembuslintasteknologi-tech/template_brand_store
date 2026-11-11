@@ -1,0 +1,54 @@
+{
+  "files": {
+    "code": [
+      "src/config/unifiedConfig.ts",
+      "src/db/index.ts",
+      "src/db/promosSchema.ts",
+      "src/db/schema.ts",
+      "src/index.ts",
+      "src/middleware/auth.ts",
+      "src/routes/analytics.ts",
+      "src/routes/auth.ts",
+      "src/routes/orders.ts",
+      "src/routes/products.ts",
+      "src/routes/promos.ts",
+      "src/types/hono.d.ts",
+      "src/validators/schemas.ts"
+    ],
+    "document": [],
+    "paper": [],
+    "image": [],
+    "video": []
+  },
+  "total_files": 13,
+  "total_words": 5084,
+  "needs_graph": false,
+  "warning": "Corpus is ~5,084 words - fits in a single context window. You may not need a graph.",
+  "skipped_sensitive": [],
+  "graphifyignore_patterns": 0,
+  "git": {
+    "source_owner": "git",
+    "source_hash": "c81d98781a76eccfcba75d3a15e1fca97c858a92",
+    "branches": [
+      "main"
+    ],
+    "max_commits": 200,
+    "active_within_days": 30
+  },
+  "scope": {
+    "requested_mode": "auto",
+    "resolved_mode": "committed",
+    "source": "default-auto",
+    "root": ".",
+    "git_root": "..",
+    "head": "c81d98781a76eccfcba75d3a15e1fca97c858a92",
+    "candidate_count": 15,
+    "included_count": 13,
+    "excluded_untracked_count": 206,
+    "excluded_ignored_count": 20618,
+    "excluded_sensitive_count": 0,
+    "missing_committed_count": 0,
+    "warnings": [],
+    "recommendation": "Use --scope all or graphify.yaml inputs.corpus for a knowledge-base folder."
+  }
+}

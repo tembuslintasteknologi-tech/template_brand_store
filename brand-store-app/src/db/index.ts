@@ -5,3 +5,17 @@ import * as schema from './schema.js';
 
 const client = postgres(unifiedConfig.database.url);
 export const db = drizzle(client, { schema });
+
+export async function pingDatabase(): Promise<boolean> {
+  try {
+    await client`SELECT 1`;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function closeDatabase(): Promise<void> {
+  await client.end();
+}
+

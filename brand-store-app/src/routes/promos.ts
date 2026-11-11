@@ -4,8 +4,14 @@ import { promos } from '../db/promosSchema.js';
 import { authMiddleware, adminOnlyMiddleware } from '../middleware/auth.js';
 import { eq, desc } from 'drizzle-orm';
 import { z } from 'zod';
+import { featureGate } from '../middleware/featureGate.js';
+import { ok, fail } from '../utils/response.js';
+import { evaluatePromo, type PromoRule } from '../services/promoEngine.js';
 
 export const promoRoutes = new Hono();
+
+// CFG-006: the promos module is gated by the `promos` feature flag.
+promoRoutes.use('*', featureGate('promos'));
 
 const promoSchema = z.object({
   code: z.string().min(3),
@@ -55,3 +61,61 @@ promoRoutes.post('/', authMiddleware, adminOnlyMiddleware, async (c) => {
     return c.json({ success: false, error: err.message }, 500);
   }
 });
+
+const validatePromoSchema = z.object({
+  code: z.string().trim().min(1, 'Promo code is required'),
+  subtotal: z.number().nonnegative().optional().default(0),
+});
+
+// POST /api/promos/validate
+promoRoutes.post('/validate', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = validatePromoSchema.safeParse(body);
+  if (!parsed.success) {
+    return fail(c, 'VALIDATION_ERROR', 'Validation failed', 400, parsed.error.issues);
+  }
+
+  const { code, subtotal } = parsed.data;
+  try {
+    const [promo] = await db
+      .select()
+      .from(promos)
+      .where(eq(promos.code, code.toUpperCase()))
+      .limit(1);
+
+    if (!promo) {
+      return fail(c, 'NOT_FOUND', 'Promo code not found', 404);
+    }
+
+    const rule: PromoRule = {
+      code: promo.code,
+      discountType: promo.discountType as any,
+      discountValue: Number(promo.discountValue),
+      minOrderAmount: promo.minOrderAmount ? Number(promo.minOrderAmount) : null,
+      maxDiscount: promo.maxDiscount ? Number(promo.maxDiscount) : null,
+      startDate: promo.startDate,
+      endDate: promo.endDate,
+      isActive: promo.isActive,
+      usageLimit: promo.usageLimit,
+      usageCount: promo.usageCount,
+    };
+
+    const evalResult = evaluatePromo(rule, subtotal);
+    if (!evalResult.valid) {
+      return fail(c, 'VALIDATION_ERROR', `Promo cannot be applied: ${evalResult.reason}`, 400, {
+        reason: evalResult.reason,
+      });
+    }
+
+    return ok(c, {
+      valid: true,
+      code: rule.code,
+      discountAmount: evalResult.discountAmount,
+      discountType: rule.discountType,
+      discountValue: rule.discountValue,
+    });
+  } catch (err: any) {
+    return fail(c, 'INTERNAL_ERROR', err.message, 500);
+  }
+});
+

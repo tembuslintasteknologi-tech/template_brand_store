@@ -11,24 +11,27 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "test": "node --test"
+    "test": "node --import tsx/esm --test \"src/tests/**/*.test.ts\""
   },
   "dependencies": {
     "@hono/zod-validator": "^0.4.1",
+    "@types/jsonwebtoken": "^9.0.10",
     "argon2": "^0.41.1",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.38.4",
     "hono": "^4.6.14",
-    "ioredis": "^6.0.0",
-    "pino": "^10.4.0",
-    "pino-pretty": "^13.2.0",
+    "ioredis-mock": "^8.13.1",
+    "jsonwebtoken": "^9.0.3",
     "postgres": "^3.4.5",
-    "zod": "^3.24.1"
+    "zod": "^3.24.1",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "drizzle-kit": "^0.30.1",
+    "eslint": "^9.0.0",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "@types/ws": "^8.5.13"
   }
 }

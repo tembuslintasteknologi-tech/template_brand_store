@@ -395,3 +395,99 @@ Catatan:
   - Dua error tsc awal sudah diperbaiki: role 'branch_admin' belum ada di ContextVariableMap
     (src/types/hono.d.ts), dan HeadersInit tidak tersedia di tipe test (diganti
     Record<string, string>).
+---
+2026-11-12 (lanjutan 2)
+Task: BR-007 ketersediaan cabang per produk + BR-008 penentu mode pengiriman
+Jenis perubahan: kode + setting + test. Dua baris checklist Fase 2.5 dicentang.
+File yang berubah:
+  A  src/services/shipping/deliveryModeService.ts   (resolveDeliveryModes, isOndemandAvailable,
+                                                    haversineDistanceKm, roundKm, parseCoordinates,
+                                                    DEFAULT_SERVICE_RADIUS_KM = 15)
+  A  src/services/branch/branchAvailabilityService.ts (listProductBranchAvailability + assembleBranches
+                                                    murni, ProductNotFoundError)
+  M  src/routes/products.ts                         (GET /:slug/branches sebelum /:slug)
+  M  src/services/config/settings.ts                (validator shipping.showAggregatorWithinRadius,
+                                                    getShowAggregatorWithinRadius)
+  M  src/db/seed.ts                                 (default shipping.showAggregatorWithinRadius
+                                                    { enabled: true })
+  A  src/tests/deliveryMode.test.ts                 (20 test)
+  A  src/tests/branchAvailability.test.ts           (18 test)
+  M  TASK-CHECKLIST.md                              (BR-007 dan BR-008 jadi [x])
+  M  VERIFY-LOG.md                                  (blok ini)
+Command:
+  npx tsc --noEmit
+Output:
+  TSC_EXIT=0
+Command:
+  npm test
+Output:
+  # tests 337
+  # suites 34
+  # pass 337
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+Baseline blok sebelumnya 299 test / 27 suite, jadi ada 38 test baru (deliveryMode 20 +
+branchAvailability 18) dan 7 suite baru.
+Command:
+  npx tsx tmp-smoke-br007.ts   (createApp + app.request, lalu file dihapus)
+Output:
+  500 /api/v1/products/contoh-produk/branches :: {"success":false,"error":"password authentication failed for user \"postgres\""}
+  500 /api/v1/products/contoh-produk/branches?lat=-6.2&lng=106.8 :: {"success":false,"error":"password authentication failed for user \"postgres\""}
+  500 /api/v1/products/contoh-produk :: {"success":false,"error":"password authentication failed for user \"postgres\""}
+  500 /api/v1/products/tidak-ada-route-ini :: {"success":false,"error":"password authentication failed for user \"postgres\""}
+Command:
+  Select-String -Path "src\routes\products.ts" -Pattern "productRoutes\.(get|post|patch|delete)"
+Output:
+  16: productRoutes.get('/', async (c) => {
+  40: productRoutes.get('/:slug/branches', async (c) => {
+  60: productRoutes.get('/:slug', async (c) => {
+  76: productRoutes.post('/', authMiddleware, adminOnlyMiddleware, async (c) => {
+  122: productRoutes.delete('/:id', authMiddleware, adminOnlyMiddleware, async (c) => {
+Command:
+  Select-String -Path "src\app.ts" -Pattern "productRoutes|branchRoutes"
+Output:
+  112: api.route('/products', productRoutes);
+  132: api.route('/admin', adminBranchRoutes);
+  133: api.route('/branch', branchRoutes);
+Command:
+  git status --porcelain
+Output:
+   M TASK-CHECKLIST.md
+   M brand-store-app/VERIFY-LOG.md
+   M brand-store-app/src/db/seed.ts
+   M brand-store-app/src/routes/products.ts
+   M brand-store-app/src/services/config/settings.ts
+  ?? .file                                        (dump terminal, sengaja tidak di-commit)
+  ?? brand-store-app/src/services/branch/branchAvailabilityService.ts
+  ?? brand-store-app/src/services/shipping/deliveryModeService.ts
+  ?? brand-store-app/src/tests/branchAvailability.test.ts
+  ?? brand-store-app/src/tests/deliveryMode.test.ts
+Catatan:
+  - Urutan route penting: '/:slug/branches' didaftarkan di baris 40, '/:slug' di baris 60.
+    Kalau dibalik, Hono akan menangkap 'branches' sebagai slug.
+  - Smoke check 500 pada kedua path karena kredensial postgres lokal salah, sama seperti
+    route produk lama. Yang dibuktikan di sini adalah path tidak 404, artinya route ter-mount
+    dan cocok. Jalur 200 butuh database hidup.
+  - assembleBranches dipisah dari query supaya filter stok, stockStatus, jarak, dan mode bisa
+    diuji tanpa Postgres. listProductBranchAvailability sekarang hanya menyusun query agregat
+    lalu menyerahkan barisnya ke fungsi murni itu.
+  - Filter stok: baris dengan available <= 0 dibuang seluruhnya, termasuk hasil sum yang
+    datang sebagai string dari postgres ('12' dibaca jadi 12). Baris dengan nilai bukan angka
+    juga dibuang, bukan ditampilkan sebagai stok nol.
+  - Cabang offline dan nonaktif disaring di SQL (is_online = true dan is_active = true), bukan
+    di JavaScript, supaya tidak ada baris yang terlanjur dihitung.
+  - Tanpa koordinat customer, distanceKm null dan mode hanya aggregator. Cabang tanpa
+    koordinat tetap muncul, tetapi juga hanya aggregator dan diletakkan setelah cabang yang
+    punya jarak terukur.
+  - service_radius_km kosong atau tidak masuk akal (0, negatif, bukan angka) jatuh ke
+    DEFAULT_SERVICE_RADIUS_KM = 15, bukan dianggap nol. Cabang lama yang belum punya radius
+    tidak kehilangan ondemand secara diam-diam.
+  - Batas radius dihitung inklusif: jarak tepat sama dengan radius masih dalam radius.
+  - BR-008 mengembalikan daftar mode, bukan memilih satu. Pilihan akhir ada di UI atau di
+    BR-010, karena OD-B (tampilkan 3PL sebagai pembanding di dalam radius) belum diputuskan.
+  - shipping.showAggregatorWithinRadius harus berbentuk objek { enabled: boolean } karena
+    validateSetting menuntut JSON objek untuk key bertitik yang tidak punya skema eksplisit.
+  - Cek cakupan courier hidup lewat tembusOnDemandProvider.calculateRate belum dipasang,
+    itu bagian BR-010. Sampai saat itu ondemandAvailable murni berbasis jarak.

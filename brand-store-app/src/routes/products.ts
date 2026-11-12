@@ -4,6 +4,11 @@ import { products, categories } from '../db/schema.js';
 import { eq, ilike, and, desc } from 'drizzle-orm';
 import { productSchema } from '../validators/schemas.js';
 import { authMiddleware, adminOnlyMiddleware } from '../middleware/auth.js';
+import {
+  ProductNotFoundError,
+  listProductBranchAvailability,
+} from '../services/branch/branchAvailabilityService.js';
+import { getShowAggregatorWithinRadius } from '../services/config/settings.js';
 
 export const productRoutes = new Hono();
 
@@ -27,6 +32,26 @@ productRoutes.get('/', async (c) => {
 
     return c.json({ success: true, data: items });
   } catch (err: any) {
+    return c.json({ success: false, error: err.message }, 500);
+  }
+});
+
+// Public: which branches can ship this product right now (BR-007)
+productRoutes.get('/:slug/branches', async (c) => {
+  try {
+    const slug = c.req.param('slug') as string;
+    const result = await listProductBranchAvailability(slug, {
+      latitude: c.req.query('lat'),
+      longitude: c.req.query('lng'),
+      showAggregatorWithinRadius: await getShowAggregatorWithinRadius(),
+    });
+
+    c.header('Cache-Control', 'no-store');
+    return c.json({ success: true, data: result });
+  } catch (err: any) {
+    if (err instanceof ProductNotFoundError) {
+      return c.json({ success: false, error: 'Product not found' }, 404);
+    }
     return c.json({ success: false, error: err.message }, 500);
   }
 });

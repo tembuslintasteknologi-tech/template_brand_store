@@ -54,6 +54,7 @@ export const settingValidators: Record<string, z.ZodTypeAny> = {
   'payment.expiry_minutes': z.object({ minutes: z.number().int().min(1).max(10080) }),
   'order.number_format': z.object({ pattern: z.string().min(1).max(120) }),
   'shipping.default': shippingDefaultSchema,
+  'shipping.showAggregatorWithinRadius': z.object({ enabled: z.boolean() }),
   feature_flags: featureFlagsSchema,
   'maintenance.mode': z.object({
     enabled: z.boolean(),
@@ -204,6 +205,17 @@ export async function getPaymentExpiryMinutes(): Promise<number> {
 
 export async function getShippingDefault() {
   return getSettingValue('shipping.default', { provider: 'tembus', requireDefaultLocation: true });
+}
+
+/**
+ * OD-B is still open. Default true means inside the ondemand radius the customer also sees
+ * 3PL as a price comparison. Flip the setting to false to hide aggregator inside the radius.
+ */
+export async function getShowAggregatorWithinRadius(): Promise<boolean> {
+  const value = await getSettingValue<{ enabled?: boolean }>('shipping.showAggregatorWithinRadius', {
+    enabled: true,
+  });
+  return value?.enabled !== false;
 }
 
 export async function getDefaultStoreLocation() {

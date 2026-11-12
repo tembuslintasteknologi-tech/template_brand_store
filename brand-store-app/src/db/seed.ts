@@ -21,6 +21,11 @@ export function defaultSettings() {
       value: { provider: 'tembus', requireDefaultLocation: true },
     },
     {
+      // OD-B is still open: default shows 3PL as a price comparison inside the ondemand radius.
+      key: 'shipping.showAggregatorWithinRadius',
+      value: { enabled: true },
+    },
+    {
       key: 'feature_flags',
       value: { reviews: true, wishlist: true, flash_sale: false, wallet: false, loyalty: false, promos: true },
     },

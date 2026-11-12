@@ -25,6 +25,7 @@ import { reviewAdminRoutes, reviewPublicRoutes } from './routes/reviews.js';
 import { wishlistRoutes } from './routes/wishlist.js';
 import { catalogAdminRoutes, catalogPublicRoutes } from './routes/catalog.js';
 import { financeAdminRoutes } from './routes/finance.js';
+import { adminBranchRoutes, branchRoutes } from './routes/branches.js';
 import { pingDatabase } from './db/index.js';
 import { redisPing } from './config/redis.js';
 
@@ -128,6 +129,8 @@ export function createApp() {
   api.route('/', catalogPublicRoutes);
   api.route('/admin', catalogAdminRoutes);
   api.route('/admin', financeAdminRoutes);
+  api.route('/admin', adminBranchRoutes);
+  api.route('/branch', branchRoutes);
 
   app.route('/api/v1', api);
   app.route('/webhooks/logistics', logisticsWebhookRoutes);

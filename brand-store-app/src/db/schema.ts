@@ -71,6 +71,7 @@ export const productVariants = pgTable('product_variants', {
 
 export const inventoryLogs = pgTable('inventory_logs', {
   id: uuid('id').primaryKey().defaultRandom(),
+  branchId: uuid('branch_id').references(() => storeLocations.id, { onDelete: 'set null' }),
   variantId: uuid('variant_id').references(() => productVariants.id).notNull(),
   productId: uuid('product_id').references(() => products.id).notNull(),
   changeType: varchar('change_type', { length: 50 }).notNull(), // 'adjustment', 'reservation', 'release', 'sale'
@@ -81,7 +82,9 @@ export const inventoryLogs = pgTable('inventory_logs', {
   referenceId: varchar('reference_id', { length: 100 }),
   performedBy: uuid('performed_by').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table) => ({
+  branchIdx: index('inventory_logs_branch_idx').on(table.branchId),
+}));
 
 export const storeLocations = pgTable('store_locations', {
   id: uuid('id').primaryKey().defaultRandom(),

@@ -66,7 +66,11 @@ authRoutes.post('/login', async (c) => {
     }
 
     // Generate mock token based on role
-    const token = user.role === 'admin' ? 'mock-admin-token' : `mock-customer-token-${user.id}`;
+    const token = user.role === 'admin'
+      ? 'mock-admin-token'
+      : user.role === 'branch_admin'
+        ? `mock-branch-admin-token-${user.branchId ?? ''}`
+        : `mock-customer-token-${user.id}`;
 
     return c.json({
       success: true,
@@ -77,6 +81,7 @@ authRoutes.post('/login', async (c) => {
           email: user.email,
           fullName: user.fullName,
           role: user.role,
+          branchId: user.branchId ?? null,
         },
       },
     });

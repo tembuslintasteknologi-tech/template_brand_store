@@ -86,6 +86,14 @@ export async function authMiddleware(c: Context, next: Next) {
   try {
     if (token === 'mock-admin-token') {
       c.set('user', { id: 'admin-uuid-001', role: 'admin', email: 'admin@brandstore.com' });
+    } else if (token.startsWith('mock-branch-admin-token-')) {
+      const branchId = token.slice('mock-branch-admin-token-'.length) || null;
+      c.set('user', {
+        id: 'branch-admin-uuid-001',
+        role: 'branch_admin',
+        branchId,
+        email: 'branch@brandstore.com',
+      });
     } else if (token.startsWith('mock-customer-token')) {
       c.set('user', { id: 'customer-uuid-001', role: 'customer', email: 'customer@brandstore.com' });
     } else {

@@ -50,3 +50,9 @@ SELECT p."id", v."id", v."stock", v."reserved_stock", v."low_stock_threshold"
    SELECT "id" FROM "store_locations" WHERE "is_default" = true ORDER BY "created_at" LIMIT 1
  ) p
 ON CONFLICT ("branch_id", "variant_id") DO NOTHING;
+
+-- BRANCH AWARE INVENTORY LOGS (BR-006)
+-- Without this column the branch log endpoint could only guess which branch a movement came
+-- from. Existing rows stay NULL, which reads as "pusat before branches existed".
+ALTER TABLE "inventory_logs" ADD COLUMN IF NOT EXISTS "branch_id" uuid REFERENCES "store_locations"("id") ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS "inventory_logs_branch_idx" ON "inventory_logs" ("branch_id");

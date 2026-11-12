@@ -300,3 +300,98 @@ Catatan:
   - drizzle/meta/_journal.json hanya mencatat 0000 dan 0006, jadi 0007 belum ter-journal.
     Jalur yang dipakai lokal tetap `npm run db:push`.
   - Belum ada route HTTP di batch ini. BR-005 dan seterusnya yang menambah mount di app.ts.
+---
+2026-11-12 (lanjutan)
+Task: BR-005 endpoint master cabang + BR-006 endpoint stok milik cabang sendiri
+Jenis perubahan: kode + schema + test. Dua baris checklist Fase 2.5 dicentang.
+File yang berubah:
+  M  src/db/schema.ts                            (inventoryLogs.branchId + inventory_logs_branch_idx)
+  M  src/middleware/auth.ts                      (token mock branch_admin, branchId di context user)
+  M  src/routes/auth.ts                          (token branch_admin + branchId di payload login)
+  M  src/services/config/storeLocations.ts       (field cabang, guard ondemand/deaktivasi/delete,
+                                                  setStoreLocationCoordinates, audit branch.*)
+  M  src/types/hono.d.ts                         (role branch_admin, branchId, branchScope)
+  M  src/app.ts                                  (mount adminBranchRoutes di /admin, branchRoutes di /branch)
+  M  drizzle/0007_branches.sql                   (inventory_logs.branch_id + inventory_logs_branch_idx)
+  A  src/services/branch/branchValidation.ts     (normalisasi kode, rentang koordinat, ondemand wajib
+                                                  koordinat, guard stok dan cabang default)
+  A  src/services/branch/branchInventoryService.ts (listBranchInventory, adjustBranchStock,
+                                                  listBranchInventoryLogs, sinkron agregat variant)
+  A  src/routes/branches.ts                      (adminBranchRoutes + branchRoutes)
+  A  src/tests/branchValidation.test.ts          (15 test)
+  A  src/tests/branchRoutes.test.ts              (8 test)
+  M  TASK-CHECKLIST.md                           (BR-005 dan BR-006 jadi [x])
+  M  VERIFY-LOG.md                               (blok ini)
+Command:
+  npx tsc --noEmit
+Output:
+  TSC_EXIT=0
+Command:
+  npm test
+Output:
+  # tests 299
+  # suites 27
+  # pass 299
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+Baseline blok sebelumnya 276 test / 20 suite, jadi ada 23 test baru (branchValidation 15 +
+branchRoutes 8) dan 7 suite baru.
+Command:
+  npx tsx schema-check.ts   (getTableConfig untuk store_locations, branch_inventory, inventory_logs)
+Output:
+  store_locations columns: id,code,name,type,phone,address_line,city,province,postal_code,
+           latitude,longitude,ondemand_enabled,service_radius_km,operating_hours,manager_name,
+           is_online,is_default,is_active,created_at
+  store_locations indexes: store_locations_code_uidx,store_locations_type_active_idx
+  branch_inventory columns: id,branch_id,variant_id,stock,reserved_stock,low_stock_threshold,updated_at
+  branch_inventory indexes: branch_inventory_branch_variant_uidx,branch_inventory_variant_idx,
+           branch_inventory_branch_idx
+  inventory_logs columns: id,branch_id,variant_id,product_id,change_type,quantity_change,
+           previous_stock,new_stock,reason,reference_id,performed_by,created_at
+  inventory_logs indexes: inventory_logs_branch_idx
+  inventory_logs fks: inventory_logs_branch_id_store_locations_id_fk,
+           inventory_logs_variant_id_product_variants_id_fk,
+           inventory_logs_product_id_products_id_fk,
+           inventory_logs_performed_by_users_id_fk
+Command:
+  git status --porcelain
+Output:
+   M TASK-CHECKLIST.md
+   M brand-store-app/drizzle/0007_branches.sql
+   M brand-store-app/src/app.ts
+   M brand-store-app/src/db/schema.ts
+   M brand-store-app/src/middleware/auth.ts
+   M brand-store-app/src/routes/auth.ts
+   M brand-store-app/src/services/config/storeLocations.ts
+   M brand-store-app/src/types/hono.d.ts
+  ?? .file
+  ?? brand-store-app/src/routes/branches.ts
+  ?? brand-store-app/src/services/branch/branchInventoryService.ts
+  ?? brand-store-app/src/services/branch/branchValidation.ts
+  ?? brand-store-app/src/tests/branchRoutes.test.ts
+  ?? brand-store-app/src/tests/branchValidation.test.ts
+Catatan:
+  - storeLocations.ts diperluas di tempat, bukan diganti dengan service paralel, karena
+    services/config/settings.ts:209 getDefaultStoreLocation dipakai checkout 3PL sebagai
+    origin pengiriman. Nama fungsi lama (listStoreLocations, createStoreLocation,
+    updateStoreLocation, deleteStoreLocation, setDefaultStoreLocation) dan bentuk
+    storeLocationSchema tetap kompatibel.
+  - Cabang baru tanpa koordinat menyimpan ondemandEnabled = false. Kalau body minta ondemand
+    secara eksplisit tanpa koordinat, permintaan ditolak ONDEMAND_REQUIRES_COORDINATES,
+    bukan diam-diam dimatikan.
+  - Delete cabang default ditolak BRANCH_IS_DEFAULT (status 409), deaktivasi atau delete
+    cabang yang masih punya stok tersedia ditolak BRANCH_HAS_STOCK (status 409). Stok
+    tersedia dihitung sebagai sum(greatest(stock - reserved_stock, 0)).
+  - branch_id di inventory_logs sengaja nullable + onDelete set null. Log lama tetap ada
+    setelah cabang dihapus dan tetap terbaca sebagai pergerakan level pusat, bukan hilang.
+  - adjustBranchStock membuat baris stok nol lebih dulu lewat onConflictDoNothing(), lalu
+    membaca ulang, supaya dua permintaan bersamaan tidak menghasilkan dua baris. Sesudah
+    update, product_variants.stock dihitung ulang sebagai sum(branch_inventory.stock)
+    sehingga query katalog lama tetap masuk akal.
+  - branchRoutes.test.ts hanya menguji jalur 401/403/400, jadi tidak butuh Postgres hidup.
+    Jalur 200 untuk inventory butuh database dan belum dicakup di suite ini.
+  - Dua error tsc awal sudah diperbaiki: role 'branch_admin' belum ada di ContextVariableMap
+    (src/types/hono.d.ts), dan HeadersInit tidak tersedia di tipe test (diganti
+    Record<string, string>).

@@ -234,3 +234,69 @@ Catatan:
   - Graph tidak di-rebuild karena tidak ada node atau edge baru di brand-store-app.
     Bukti: `git status --porcelain -- brand-store-app` kosong, jadi isi graph.json
     yang terakhir (703 nodes / 1593 edges) masih mewakili kode saat ini.
+---
+2026-11-12 (lanjutan)
+Task: BR-001..BR-004 fondasi Multi Cabang (schema, migrasi, scoping, service stok)
+Jenis perubahan: kode + schema + test. Empat baris checklist Fase 2.5 dicentang.
+File yang berubah:
+  M  src/db/schema.ts                     (users.branchId + users_branch_idx, storeLocations
+                                           kolom baru + 2 index, tabel branchInventory + 3 index)
+  M  src/middleware/auth.ts               (requireBranchScope + BranchScopeOptions)
+  A  drizzle/0007_branches.sql            (DDL idempotent + backfill pusat / CBG-<8hex>)
+  A  src/services/branch/branchScope.ts   (resolveBranchAccess, branchIdOf, konstanta role)
+  A  src/services/branch/branchStockService.ts (resolveAvailable, canFulfill, stockStatus,
+                                           groupItemsByBranch, planReservation, applyReserve,
+                                           applyRelease, BranchStockError)
+  A  src/tests/branchScope.test.ts        (10 test)
+  A  src/tests/branchStock.test.ts        (15 test)
+  M  TASK-CHECKLIST.md                    (BR-001..BR-004 jadi [x])
+  M  VERIFY-LOG.md                        (blok ini)
+Command:
+  npx tsc --noEmit
+Output:
+  TSC_EXIT=0
+Command:
+  npm test
+Output:
+  # tests 276
+  # suites 20
+  # pass 276
+  # fail 0
+Baseline sebelumnya 251 test, jadi ada 25 test baru (branchScope 10 + branchStock 15).
+Command:
+  node --import tsx/esm tmp-schema-check.ts   (getTableConfig untuk 3 tabel)
+Output:
+  users -> id, email, password_hash, full_name, phone, role, status, branch_id,
+           email_verified, created_at, updated_at
+    indexes: users_email_idx, users_branch_idx
+    fks: users_branch_id_store_locations_id_fk
+  store_locations -> id, code, name, type, phone, address_line, city, province,
+           postal_code, latitude, longitude, ondemand_enabled, service_radius_km,
+           operating_hours, manager_name, is_online, is_default, is_active, created_at
+    indexes: store_locations_code_uidx, store_locations_type_active_idx
+  branch_inventory -> id, branch_id, variant_id, stock, reserved_stock,
+           low_stock_threshold, updated_at
+    indexes: branch_inventory_branch_variant_uidx, branch_inventory_variant_idx,
+             branch_inventory_branch_idx
+    fks: branch_inventory_branch_id_store_locations_id_fk,
+         branch_inventory_variant_id_product_variants_id_fk
+Command:
+  git status --porcelain -- brand-store-app TASK-CHECKLIST.md
+Output:
+   M TASK-CHECKLIST.md
+   M brand-store-app/src/db/schema.ts
+   M brand-store-app/src/middleware/auth.ts
+  ?? brand-store-app/drizzle/0007_branches.sql
+  ?? brand-store-app/src/services/branch/
+  ?? brand-store-app/src/tests/branchScope.test.ts
+  ?? brand-store-app/src/tests/branchStock.test.ts
+Catatan:
+  - Foreign key users.branch_id ke store_locations valid walau tabel storeLocations
+    dideklarasikan setelah users, karena drizzle mengevaluasi references() secara lazy.
+    Diverifikasi lewat getTableConfig, bukan hanya dari tsc.
+  - Satu test sempat gagal karena fixture pusat punya reservedStock 2 (available 8) tetapi
+    test meminta 9. Fixture yang salah, bukan implementasi. Test dipecah jadi dua: penjumlahan
+    5+3 = 8 lulus, dan 5+4 = 9 ditolak dengan pesan "only has 8 available".
+  - drizzle/meta/_journal.json hanya mencatat 0000 dan 0006, jadi 0007 belum ter-journal.
+    Jalur yang dipakai lokal tetap `npm run db:push`.
+  - Belum ada route HTTP di batch ini. BR-005 dan seterusnya yang menambah mount di app.ts.

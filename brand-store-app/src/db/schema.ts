@@ -6,13 +6,15 @@ export const users = pgTable('users', {
   passwordHash: varchar('password_hash', { length: 255 }).notNull(),
   fullName: varchar('full_name', { length: 255 }).notNull(),
   phone: varchar('phone', { length: 50 }),
-  role: varchar('role', { length: 50 }).notNull().default('customer'), // 'admin', 'customer'
+  role: varchar('role', { length: 50 }).notNull().default('customer'), // 'admin' (pusat), 'branch_admin' (cabang), 'customer'
   status: varchar('status', { length: 50 }).notNull().default('active'), // 'active', 'suspended', 'pending'
+  branchId: uuid('branch_id').references(() => storeLocations.id, { onDelete: 'set null' }), // wajib terisi untuk role 'branch_admin'
   emailVerified: boolean('email_verified').default(false),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
   emailIdx: index('users_email_idx').on(table.email),
+  branchIdx: index('users_branch_idx').on(table.branchId),
 }));
 
 export const categories = pgTable('categories', {
@@ -83,16 +85,42 @@ export const inventoryLogs = pgTable('inventory_logs', {
 
 export const storeLocations = pgTable('store_locations', {
   id: uuid('id').primaryKey().defaultRandom(),
+  code: varchar('code', { length: 20 }),
   name: varchar('name', { length: 150 }).notNull(),
+  type: varchar('type', { length: 20 }).notNull().default('cabang'), // 'pusat' | 'cabang'
   phone: varchar('phone', { length: 50 }),
   addressLine: text('address_line').notNull(),
   city: varchar('city', { length: 100 }).notNull(),
   province: varchar('province', { length: 100 }).notNull(),
   postalCode: varchar('postal_code', { length: 20 }).notNull(),
+  latitude: decimal('latitude', { precision: 10, scale: 7 }),
+  longitude: decimal('longitude', { precision: 10, scale: 7 }),
+  ondemandEnabled: boolean('ondemand_enabled').notNull().default(true),
+  serviceRadiusKm: integer('service_radius_km'),
+  operatingHours: jsonb('operating_hours').default({}),
+  managerName: varchar('manager_name', { length: 150 }),
+  isOnline: boolean('is_online').notNull().default(true),
   isDefault: boolean('is_default').default(false),
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table) => ({
+  codeUidx: uniqueIndex('store_locations_code_uidx').on(table.code),
+  typeActiveIdx: index('store_locations_type_active_idx').on(table.type, table.isActive),
+}));
+
+export const branchInventory = pgTable('branch_inventory', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  branchId: uuid('branch_id').references(() => storeLocations.id, { onDelete: 'cascade' }).notNull(),
+  variantId: uuid('variant_id').references(() => productVariants.id, { onDelete: 'cascade' }).notNull(),
+  stock: integer('stock').notNull().default(0),
+  reservedStock: integer('reserved_stock').notNull().default(0),
+  lowStockThreshold: integer('low_stock_threshold').notNull().default(5),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  branchVariantUidx: uniqueIndex('branch_inventory_branch_variant_uidx').on(table.branchId, table.variantId),
+  variantIdx: index('branch_inventory_variant_idx').on(table.variantId),
+  branchIdx: index('branch_inventory_branch_idx').on(table.branchId),
+}));
 
 export const settings = pgTable('settings', {
   id: uuid('id').primaryKey().defaultRandom(),

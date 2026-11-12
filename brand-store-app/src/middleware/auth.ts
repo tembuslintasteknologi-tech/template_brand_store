@@ -1,6 +1,7 @@
 import { Context, Next } from 'hono';
 import { unifiedConfig } from '../config/unifiedConfig.js';
 import { ensureRedisConnected } from '../config/redis.js';
+import { resolveBranchAccess } from '../services/branch/branchScope.js';
 import jwt from 'jsonwebtoken';
 
 export function signJwt(payload: object, expiresIn: string | number = unifiedConfig.jwt.expiresIn, secret: string = unifiedConfig.jwt.secret): string {
@@ -106,6 +107,37 @@ export function requireRole(role: string) {
     if (!user || user.role !== role) {
       return c.json({ success: false, error: { code: 'FORBIDDEN', message: `Forbidden: ${role} role required` } }, 403);
     }
+    return await next();
+  };
+}
+
+export interface BranchScopeOptions {
+  /** Route param that carries the branch id. Defaults to `branchId`. */
+  param?: string;
+  /** Header used when the route has no branch param. Defaults to `X-Branch-Id`. */
+  header?: string;
+}
+
+/**
+ * Restricts a route to one branch, or to every branch for the pusat admin.
+ *
+ * The resolved branch is stored as `branchScope` on the request context so handlers never
+ * have to read a branch id from the request body, which is what BR-006 requires.
+ */
+export function requireBranchScope(options: BranchScopeOptions = {}) {
+  const paramName = options.param ?? 'branchId';
+  const headerName = options.header ?? 'X-Branch-Id';
+
+  return async function (c: Context, next: Next) {
+    const user = c.get('user');
+    const requested = c.req.param(paramName) ?? c.req.header(headerName) ?? null;
+    const decision = resolveBranchAccess(user, requested);
+
+    if (!decision.allowed) {
+      return c.json({ success: false, error: { code: decision.code, message: decision.message } }, decision.status);
+    }
+
+    c.set('branchScope', { branchId: decision.branchId, scope: decision.scope });
     return await next();
   };
 }

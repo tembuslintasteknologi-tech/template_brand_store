@@ -231,6 +231,19 @@ export async function getDefaultStoreLocation() {
   }
 }
 
+/**
+ * Branch row by id. Used by shipment creation so the parcel leaves from the branch that was
+ * picked at checkout, not from the default location. Returns null when the row is gone.
+ */
+export async function getStoreLocationById(id: string) {
+  try {
+    const [row] = await db.select().from(storeLocations).where(eq(storeLocations.id, id as any)).limit(1);
+    return row ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getSiteConfig() {
   const [profile, flags] = await Promise.all([getBrandProfile(), getFeatureFlags()]);
   return {

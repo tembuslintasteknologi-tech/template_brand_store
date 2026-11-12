@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
-import { orders, shipments } from '../db/schema.js';
+import { orders, orderItems, shipments } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { authMiddleware, adminOnlyMiddleware } from '../middleware/auth.js';
 import { ensureLogisticProvidersRegistered } from '../services/logistics/logisticRegistry.js';
@@ -11,6 +11,7 @@ import {
 } from '../services/logistics/logisticProvider.js';
 import { createShipmentForOrder, persistTracking, syncOrderFromShipment } from '../services/logistics/shipmentService.js';
 import { FailureResolutionAction, resolveDeliveryFailure } from '../services/logistics/statusMap.js';
+import { OrderSourceError } from '../services/branch/orderSourceService.js';
 import { notifyOrderEvent } from '../services/notifications/orderNotifications.js';
 
 export const logisticsRoutes = new Hono();
@@ -198,9 +199,31 @@ logisticsRoutes.post('/admin/shipments', authMiddleware, adminOnlyMiddleware, as
   }
 
   try {
+    // BR-009: the parcel leaves from the branch the order was placed from. A single-branch
+    // order knows its origin, so it is derived here. A multi-branch order becomes one shipment
+    // per branch (OD-A), so the admin has to name the branch instead of getting a guess.
+    const orderId = String(body.orderId);
+    let originBranchId: string | null = body.originBranchId ? String(body.originBranchId) : null;
+    if (!originBranchId) {
+      const [orderRow] = await db
+        .select({ fulfillmentSource: orders.fulfillmentSource })
+        .from(orders)
+        .where(eq(orders.id, orderId as any))
+        .limit(1);
+      if (orderRow?.fulfillmentSource !== 'multi_branch') {
+        const [itemRow] = await db
+          .select({ sourceBranchId: orderItems.sourceBranchId })
+          .from(orderItems)
+          .where(eq(orderItems.orderId, orderId as any))
+          .limit(1);
+        originBranchId = itemRow?.sourceBranchId ?? null;
+      }
+    }
+
     const created = await createShipmentForOrder(provider, {
-      orderId: String(body.orderId),
+      orderId,
       provider: provider.name,
+      originBranchId,
       service: body.service ? String(body.service) : undefined,
       deliveryInstructions: body.deliveryInstructions ? String(body.deliveryInstructions) : undefined,
       cod: Boolean(body.cod),
@@ -218,9 +241,13 @@ logisticsRoutes.post('/admin/shipments', authMiddleware, adminOnlyMiddleware, as
         service: created.shipment.service,
         status: created.shipment.status,
         labelUrl: created.shipment.labelUrl,
+        originBranchId: created.shipment.originBranchId,
       },
     });
   } catch (err: any) {
+    if (err instanceof OrderSourceError) {
+      return c.json({ success: false, error: { code: err.code, message: err.message } }, err.status as any);
+    }
     const status = err instanceof LogisticGatewayError && err.statusCode === 501 ? 501 : 502;
     return c.json({ success: false, error: err.message, provider: (err as any)?.provider ?? provider.name }, status);
   }

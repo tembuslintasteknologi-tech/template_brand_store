@@ -7,7 +7,8 @@ import {
   TrackingInfo,
 } from './logisticProvider.js';
 import { shipmentStatusToOrderStatus } from './statusMap.js';
-import { getDefaultStoreLocation } from '../config/settings.js';
+import { OrderSourceError } from '../branch/orderSourceService.js';
+import { getDefaultStoreLocation, getStoreLocationById } from '../config/settings.js';
 
 export interface CreateShipmentInput {
   orderId: string;
@@ -16,6 +17,12 @@ export interface CreateShipmentInput {
   deliveryInstructions?: string;
   cod?: boolean;
   insurance?: boolean;
+  /**
+   * BR-009: the branch the customer picked at checkout. When set, the parcel leaves from that
+   * branch and the id is persisted on the shipment. Absent keeps the default location, which
+   * is how every pre-branch order behaves.
+   */
+  originBranchId?: string | null;
 }
 
 export async function createShipmentForOrder(
@@ -39,14 +46,35 @@ export async function createShipmentForOrder(
     longitude: typeof address.longitude === 'number' ? address.longitude : undefined,
   };
 
-  const defaultLocation = await getDefaultStoreLocation();
+  const originLocation = input.originBranchId
+    ? await getStoreLocationById(input.originBranchId)
+    : await getDefaultStoreLocation();
+
+  if (input.originBranchId && !originLocation) {
+    throw new OrderSourceError(
+      'BRANCH_NOT_FOUND',
+      `Cabang asal tidak ditemukan: ${input.originBranchId}`,
+      404
+    );
+  }
+
+  // Branch coordinates are decimal strings in postgres. Handing undefined to the provider is
+  // better than handing it NaN, so the parse is guarded.
+  const toCoord = (value: unknown): number | undefined => {
+    if (value === null || value === undefined || value === '') return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
   const origin = {
-    name: defaultLocation?.name ?? process.env.STORE_ORIGIN_NAME ?? 'Gudang Utama',
-    phone: defaultLocation?.phone ?? process.env.STORE_ORIGIN_PHONE ?? '+628123456789',
-    addressLine: defaultLocation?.addressLine ?? process.env.STORE_ORIGIN_ADDRESS ?? 'Jl. Sudirman No. 1',
-    city: defaultLocation?.city ?? process.env.STORE_ORIGIN_CITY ?? 'Jakarta Pusat',
-    province: defaultLocation?.province ?? process.env.STORE_ORIGIN_PROVINCE ?? 'DKI Jakarta',
-    postalCode: defaultLocation?.postalCode ?? process.env.STORE_ORIGIN_POSTAL_CODE ?? '10210',
+    name: originLocation?.name ?? process.env.STORE_ORIGIN_NAME ?? 'Gudang Utama',
+    phone: originLocation?.phone ?? process.env.STORE_ORIGIN_PHONE ?? '+628123456789',
+    addressLine: originLocation?.addressLine ?? process.env.STORE_ORIGIN_ADDRESS ?? 'Jl. Sudirman No. 1',
+    city: originLocation?.city ?? process.env.STORE_ORIGIN_CITY ?? 'Jakarta Pusat',
+    province: originLocation?.province ?? process.env.STORE_ORIGIN_PROVINCE ?? 'DKI Jakarta',
+    postalCode: originLocation?.postalCode ?? process.env.STORE_ORIGIN_POSTAL_CODE ?? '10210',
+    latitude: toCoord(originLocation?.latitude),
+    longitude: toCoord(originLocation?.longitude),
   };
 
   const params: CreateShipmentParams = {
@@ -68,6 +96,7 @@ export async function createShipmentForOrder(
     .insert(shipments)
     .values({
       orderId: order.id,
+      originBranchId: input.originBranchId ?? null,
       provider: provider.name,
       mode: provider.mode,
       service: result.service ?? input.service ?? null,

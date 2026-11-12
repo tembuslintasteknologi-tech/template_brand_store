@@ -56,3 +56,13 @@ ON CONFLICT ("branch_id", "variant_id") DO NOTHING;
 -- from. Existing rows stay NULL, which reads as "pusat before branches existed".
 ALTER TABLE "inventory_logs" ADD COLUMN IF NOT EXISTS "branch_id" uuid REFERENCES "store_locations"("id") ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS "inventory_logs_branch_idx" ON "inventory_logs" ("branch_id");
+
+-- ORDER SOURCE (BR-009)
+-- Which branch ships each line, and how it leaves. Existing rows keep 'branch' because all
+-- orders before the branch model came from the single pusat pool.
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fulfillment_source" varchar(20) NOT NULL DEFAULT 'branch';
+ALTER TABLE "order_items" ADD COLUMN IF NOT EXISTS "source_branch_id" uuid REFERENCES "store_locations"("id") ON DELETE SET NULL;
+ALTER TABLE "order_items" ADD COLUMN IF NOT EXISTS "fulfillment_mode" varchar(20);
+CREATE INDEX IF NOT EXISTS "order_items_source_branch_idx" ON "order_items" ("source_branch_id");
+ALTER TABLE "shipments" ADD COLUMN IF NOT EXISTS "origin_branch_id" uuid REFERENCES "store_locations"("id") ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS "shipments_origin_branch_idx" ON "shipments" ("origin_branch_id");

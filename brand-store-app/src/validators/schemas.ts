@@ -29,6 +29,10 @@ export const orderSchema = z.object({
   items: z.array(z.object({
     productId: z.string().uuid(),
     quantity: z.number().int().positive(),
+    // BR-009: cart items carry the branch the customer picked. Absent means the legacy pusat
+    // pool, which keeps old clients working until the storefront always sends a branch.
+    branchId: z.string().uuid().optional(),
+    fulfillmentMode: z.enum(['ondemand', 'aggregator']).optional(),
   })).min(1),
   shippingAddress: z.object({
     recipientName: z.string(),

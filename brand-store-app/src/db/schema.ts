@@ -137,6 +137,9 @@ export const orders = pgTable('orders', {
   orderNumber: varchar('order_number', { length: 100 }).notNull().unique(),
   customerId: uuid('customer_id').references(() => users.id).notNull(),
   status: varchar('status', { length: 50 }).notNull().default('pending'), // 'pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled'
+  // BR-009: orders before the branch model came from the single pusat pool, so the default
+  // reads as 'branch' instead of NULL. 'multi_branch' means the cart mixed branches.
+  fulfillmentSource: varchar('fulfillment_source', { length: 20 }).notNull().default('branch'),
   totalAmount: decimal('total_amount', { precision: 12, scale: 2 }).notNull(),
   shippingAmount: decimal('shipping_amount', { precision: 12, scale: 2 }).notNull().default('0'),
   discountAmount: decimal('discount_amount', { precision: 12, scale: 2 }).notNull().default('0'),
@@ -156,15 +159,28 @@ export const orderItems = pgTable('order_items', {
   orderId: uuid('order_id').references(() => orders.id, { onDelete: 'cascade' }).notNull(),
   productId: uuid('product_id').references(() => products.id).notNull(),
   variantId: uuid('variant_id').references(() => productVariants.id),
+  // BR-009: which branch ships this line, and how. Null branch means the pusat pool, which is
+  // how every order placed before the branch model looks.
+  sourceBranchId: uuid('source_branch_id').references(() => storeLocations.id, {
+    onDelete: 'set null',
+  }),
+  fulfillmentMode: varchar('fulfillment_mode', { length: 20 }), // 'ondemand' | 'aggregator'
   quantity: integer('quantity').notNull(),
   unitPrice: decimal('unit_price', { precision: 12, scale: 2 }).notNull(),
   totalPrice: decimal('total_price', { precision: 12, scale: 2 }).notNull(),
   productSnapshot: jsonb('product_snapshot'),
-});
+}, (table) => ({
+  sourceBranchIdx: index('order_items_source_branch_idx').on(table.sourceBranchId),
+}));
 
 export const shipments = pgTable('shipments', {
   id: uuid('id').primaryKey().defaultRandom(),
   orderId: uuid('order_id').references(() => orders.id, { onDelete: 'cascade' }).notNull(),
+  // BR-009: the parcel leaves from the branch the customer picked, not from the default
+  // location. Null keeps the old behaviour for orders created before this column existed.
+  originBranchId: uuid('origin_branch_id').references(() => storeLocations.id, {
+    onDelete: 'set null',
+  }),
   provider: varchar('provider', { length: 50 }).notNull(),
   mode: varchar('mode', { length: 20 }).notNull(), // 'ondemand' | 'aggregator'
   service: varchar('service', { length: 50 }),
@@ -181,6 +197,7 @@ export const shipments = pgTable('shipments', {
 }, (table) => ({
   orderIdx: index('shipments_order_idx').on(table.orderId),
   awbIdx: index('shipments_awb_idx').on(table.awb),
+  originBranchIdx: index('shipments_origin_branch_idx').on(table.originBranchId),
 }));
 
 export const adminLogs = pgTable('admin_logs', {

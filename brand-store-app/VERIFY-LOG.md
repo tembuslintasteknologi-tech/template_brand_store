@@ -491,3 +491,82 @@ Catatan:
     validateSetting menuntut JSON objek untuk key bertitik yang tidak punya skema eksplisit.
   - Cek cakupan courier hidup lewat tembusOnDemandProvider.calculateRate belum dipasang,
     itu bagian BR-010. Sampai saat itu ondemandAvailable murni berbasis jarak.
+---
+2026-11-12 (lanjutan 3)
+Task: BR-009 sumber order per cabang
+Jenis perubahan: skema + migrasi + service + route + test. Satu baris checklist Fase 2.5 dicentang.
+File yang berubah:
+  M  src/db/schema.ts                             (orders.fulfillment_source,
+                                                   order_items.source_branch_id + fulfillment_mode
+                                                   + index, shipments.origin_branch_id + index)
+  M  drizzle/0007_branches.sql                    (blok -- ORDER SOURCE (BR-009), idempoten)
+  A  src/services/branch/orderSourceService.ts     (buildBranchSnapshot, distinctBranchIds,
+                                                   resolveFulfillmentSource, assertFulfillmentMode,
+                                                   planBranchShipments, branchSellableStock,
+                                                   assertBranchCanFulfill, getBranchSnapshot,
+                                                   OrderSourceError)
+  M  src/validators/schemas.ts                    (orderSchema: branchId + fulfillmentMode opsional)
+  M  src/routes/orders.ts                         (stok cabang jadi sumber kebenaran, snapshot,
+                                                   fulfillment_source, shipmentPlan di respons)
+  M  src/services/config/settings.ts              (getStoreLocationById)
+  M  src/services/logistics/shipmentService.ts    (originBranchId opsional, origin pakai koordinat
+                                                   cabang, OrderSourceError saat cabang hilang)
+  M  src/routes/logistics.ts                      (originBranchId dari body atau turunan item order)
+  A  src/tests/orderSource.test.ts                (18 test)
+  M  TASK-CHECKLIST.md                            (BR-009 jadi [x])
+  M  VERIFY-LOG.md                                (blok ini)
+Command:
+  npx tsc --noEmit
+Output:
+  TSC_EXIT=0
+Command:
+  npm test
+Output:
+  # tests 355
+  # suites 39
+  # pass 355
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+Baseline blok sebelumnya 337 test / 34 suite, jadi ada 18 test baru dan 5 suite baru
+(seluruhnya di orderSource.test.ts).
+Command:
+  git status --porcelain        (baris .engram diringkas)
+Output:
+   M brand-store-app/drizzle/0007_branches.sql
+   M brand-store-app/src/db/schema.ts
+   M brand-store-app/src/routes/logistics.ts
+   M brand-store-app/src/routes/orders.ts
+   M brand-store-app/src/services/config/settings.ts
+   M brand-store-app/src/services/logistics/shipmentService.ts
+   M brand-store-app/src/validators/schemas.ts
+  ?? .file                                        (dump terminal, sengaja tidak di-commit)
+  ?? brand-store-app/src/services/branch/orderSourceService.ts
+  ?? brand-store-app/src/tests/orderSource.test.ts
+Catatan:
+  - Item order yang membawa branchId dicek ke stok cabang, bukan ke products.stock. products.stock
+    tetap dipakai hanya untuk item lama tanpa branch, supaya klien yang belum mengirim branch
+    tidak langsung putus.
+  - Stok cabang dihitung sum(greatest(stock - reserved_stock, 0)) per varian produk, angka yang
+    sama dengan yang dipakai halaman produk BR-007, jadi katalog dan checkout tidak bisa berbeda
+    pendapat.
+  - Branch yang tidak ada, nonaktif, atau stok kurang melempar OrderSourceError dengan status
+    404 / 409 / 400 dan kode BRANCH_NOT_FOUND / BRANCH_INACTIVE / BRANCH_OUT_OF_STOCK. Route
+    memetakannya apa adanya, tidak lagi jadi 500.
+  - Mode pengiriman default aggregator saat klien tidak mengirim apa pun, karena 3PL selalu bisa
+    jalan. Mode asing ditolak INVALID_FULFILLMENT_MODE, bukan ditebak jadi aggregator.
+  - fulfillment_source hanya multi_branch kalau ada dua branch id berbeda. Item pusat (branchId
+    kosong) tidak dihitung sebagai cabang kedua.
+  - Snapshot cabang masuk ke product_snapshot.branch supaya riwayat order tetap terbaca walau
+    master cabang nanti diubah namanya atau dihapus. source_branch_id sendiri ON DELETE SET NULL.
+  - Respons POST /api/v1/orders sekarang juga membawa shipments (hasil planBranchShipments),
+    sehingga UI tahu keranjang dipecah jadi berapa pengiriman tanpa menghitung ulang.
+  - originBranchId di createShipmentForOrder memakai getStoreLocationById dan ikut menulis
+    latitude/longitude cabang ke origin. Kalau cabang yang diminta sudah tidak ada, lempar
+    BRANCH_NOT_FOUND 404, bukan diam-diam mengirim dari gudang default.
+  - POST /api/v1/logistics/admin/shipments menurunkan origin dari item order hanya kalau order
+    bukan multi_branch. Untuk order multi_branch admin wajib menyebut originBranchId karena satu
+    order bisa jadi beberapa shipment (OD-A belum final).
+  - Jalur 200 POST /api/v1/orders dan pembuatan shipment tetap butuh Postgres hidup, jadi tidak
+    ada smoke check HTTP di blok ini. Yang diuji adalah lapisan keputusan murni.

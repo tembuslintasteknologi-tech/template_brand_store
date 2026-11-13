@@ -631,3 +631,70 @@ Catatan kontrak:
     OrderSourceError({ code, message }), bukan string bebas seperti sebelumnya.
   - Jalur 200 untuk /options dan /checkout belum bisa di-smoke-test: butuh Postgres hidup plus
     API courier. Yang diuji lapisan keputusan murni.
+---
+2026-11-14 (lanjutan 5)
+Task: BR-011 reservasi stok per cabang
+Jenis perubahan: service + helper murni + wrapper legacy + test. Satu baris checklist Fase 2.5
+dicentang.
+File yang berubah:
+  A  src/services/branch/branchReservationService.ts  (reserveStockAtBranch, releaseStockAtBranch,
+                                                      loadBranchRow, loadReferenceLogs,
+                                                      loadProductId, syncReservedAggregate)
+  M  src/services/branch/branchStockService.ts        (findReservedBranch, hasReleasedReference,
+                                                      ReservationLogLike)
+  M  src/services/inventoryService.ts                 (reserveStock/releaseReservedStock jadi
+                                                      wrapper ke cabang pusat dan ke cabang asal)
+  M  src/services/config/settings.ts                  (getDefaultStoreLocation tanpa .limit(1))
+  A  src/tests/branchReservation.test.ts              (12 test)
+  M  TASK-CHECKLIST.md                                (BR-011 jadi [x])
+  M  VERIFY-LOG.md                                    (blok ini)
+Command:
+  npx tsc --noEmit
+Output:
+  TSC_EXIT=0
+Command:
+  node --import tsx/esm --test "src/tests/inventory.test.ts" "src/tests/integration/inventoryFlow.test.ts"
+Output:
+  # tests 12
+  # pass 12
+  # fail 0
+Command:
+  node --import tsx/esm --test "src/tests/branchReservation.test.ts"
+Output:
+  # tests 12
+  # pass 12
+  # fail 0
+Command:
+  npm test
+Output:
+  # tests 387
+  # suites 42
+  # pass 387
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+Baseline blok sebelumnya 375 test / 42 suite, jadi ada 12 test baru. Jumlah suite tidak naik
+karena branchReservation.test.ts memakai satu test induk dengan subtest, sama seperti
+inventory.test.ts.
+Catatan kontrak:
+  - reserveStockAtBranch menolak cabang yang tidak menyimpan varian dengan BRANCH_STOCK_NOT_FOUND,
+    bukan membuat baris stok nol yang bisa menyembunyikan produk. Kuantitas nol, negatif, atau
+    pecahan ditolak INVALID_QUANTITY sebelum menyentuh database.
+  - Ketersediaan memakai helper murni BR-004, jadi reserved_stock tidak pernah melewati stok
+    nyata cabang dan pesan INSUFFICIENT_STOCK menyebut sisa yang benar-benar bisa dijual.
+  - Setiap tulis reservation/release membuat baris inventory_logs dengan branchId, variantId,
+    changeType, dan referenceId yang sama. releaseReservedStock membaca log itu lewat
+    findReservedBranch, jadi pelepasan kembali ke cabang asal walau pemanggil tidak menyebut
+    cabang. Log lama tanpa branch_id jatuh ke cabang pusat.
+  - Pelepasan kedua untuk reference yang sama mengembalikan alreadyReleased: true dan tidak
+    menulis log baru. applyRelease menjepit di nol, jadi kelebihan pelepasan tidak membuat angka
+    negatif.
+  - syncReservedAggregate menjumlah reserved_stock semua cabang ke product_variants.reserved_stock
+    supaya query katalog lama tidak melenceng. Kalau hasil sum bukan angka finite (mock lama),
+    penulisan dilewati daripada menimpa angka dengan nol palsu.
+  - checkout BR-010 belum memanggil reservasi, jadi belum ada hook release di routes/payments.ts
+    atau paymentExpiry.ts. Helper-nya sudah idempotent dan siap dipasang saat reservasi
+    disambungkan ke alur order.
+  - Jalur 200 reservasi butuh Postgres hidup, jadi blok ini hanya membuktikan lapisan service
+    lewat database mock dan test murni.

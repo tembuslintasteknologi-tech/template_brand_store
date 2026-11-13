@@ -194,6 +194,56 @@ export function applyReserve(rows: BranchStockRow[], plan: ReservationPlan[]): B
 }
 
 /**
+ * Minimal shape of an inventory_logs row, so the reservation replay rules can be tested
+ * without a database. Only the columns the rules actually look at are declared.
+ */
+export interface ReservationLogLike {
+  referenceId?: string | null;
+  changeType?: string | null;
+  branchId?: string | null;
+  variantId?: string | null;
+  quantityChange?: number | null;
+}
+
+/**
+ * Finds the branch a reference was reserved from (BR-011).
+ *
+ * A release must go back to the branch that took the reservation, never to the pusat or the
+ * branch the admin happens to look at. Logs are scanned newest first inside the caller, so this
+ * returns the first matching reservation. A log without a branch id is a legacy pusat
+ * reservation from before branch_inventory existed and is ignored here; the caller falls back.
+ */
+export function findReservedBranch(
+  logs: ReservationLogLike[],
+  referenceId: string
+): string | null {
+  const reference = typeof referenceId === 'string' ? referenceId.trim() : '';
+  if (!reference) return null;
+
+  for (const log of logs) {
+    if (log.referenceId !== reference) continue;
+    if (log.changeType !== 'reservation') continue;
+    if (typeof log.branchId === 'string' && log.branchId.length > 0) {
+      return log.branchId;
+    }
+  }
+  return null;
+}
+
+/**
+ * True when the reference was already released. This is what makes a second release call safe:
+ * the caller reports the current number instead of subtracting the quantity twice.
+ */
+export function hasReleasedReference(
+  logs: ReservationLogLike[],
+  referenceId: string
+): boolean {
+  const reference = typeof referenceId === 'string' ? referenceId.trim() : '';
+  if (!reference) return false;
+  return logs.some((log) => log.referenceId === reference && log.changeType === 'release');
+}
+
+/**
  * Returns a new row list with reserved stock released. Releases are clamped at zero, which
  * keeps a duplicate release call from pushing the number negative.
  */

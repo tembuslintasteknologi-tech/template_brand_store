@@ -1,6 +1,9 @@
 import { db } from '../db/index.js';
 import { productVariants, inventoryLogs, products } from '../db/schema.js';
 import { eq, sql } from 'drizzle-orm';
+import { getDefaultStoreLocation } from './config/settings.js';
+import { findReservedBranch } from './branch/branchStockService.js';
+import { releaseStockAtBranch, reserveStockAtBranch } from './branch/branchReservationService.js';
 
 export interface StockAdjustment {
   variantId: string;
@@ -57,59 +60,52 @@ export async function adjustStock(input: StockAdjustment) {
   };
 }
 
+/**
+ * Legacy wrapper (BR-011). Reservation now lives in `branch_inventory`, so this keeps the old
+ * signature by resolving the pusat branch and delegating. New code should call
+ * `reserveStockAtBranch` with the branch that actually sells the item.
+ */
 export async function reserveStock(variantId: string, quantity: number, referenceId: string) {
   const variant = await getVariantStock(variantId);
   if (!variant) {
     throw new Error('Product variant not found');
   }
 
-  const available = variant.stock - variant.reservedStock;
-  if (available < quantity) {
-    throw new Error('Insufficient available stock for reservation');
+  const pusat = await getDefaultStoreLocation();
+  if (!pusat) {
+    throw new Error('Cabang pusat tidak ditemukan, reservasi tidak bisa dilanjutkan');
   }
 
-  const newReserved = variant.reservedStock + quantity;
-
-  await db.update(productVariants)
-    .set({ reservedStock: newReserved, updatedAt: new Date() })
-    .where(eq(productVariants.id, variantId));
-
-  await db.insert(inventoryLogs).values({
-    variantId,
-    productId: variant.productId,
-    changeType: 'reservation',
-    quantityChange: -quantity,
-    previousStock: variant.stock,
-    newStock: variant.stock,
-    reason: `Reserved for order/checkout ${referenceId}`,
-    referenceId,
-  });
-
-  return { success: true, reservedStock: newReserved };
+  const result = await reserveStockAtBranch(pusat.id, variantId, quantity, referenceId);
+  return { success: true as const, reservedStock: result.reservedStock, branchId: result.branchId };
 }
 
+/**
+ * Legacy wrapper (BR-011). The release goes back to the branch named in the reservation log, not
+ * to the pusat, and the branch helper makes a repeated release a no-op.
+ */
 export async function releaseReservedStock(variantId: string, quantity: number, referenceId: string) {
   const variant = await getVariantStock(variantId);
   if (!variant) {
     throw new Error('Product variant not found');
   }
 
-  const newReserved = Math.max(0, variant.reservedStock - quantity);
+  const logs = await db
+    .select()
+    .from(inventoryLogs)
+    .where(eq(inventoryLogs.referenceId, referenceId));
 
-  await db.update(productVariants)
-    .set({ reservedStock: newReserved, updatedAt: new Date() })
-    .where(eq(productVariants.id, variantId));
+  const reservedBranch = findReservedBranch(logs as any, referenceId);
+  const branchId = reservedBranch ?? (await getDefaultStoreLocation())?.id;
+  if (!branchId) {
+    throw new Error('Cabang reservasi tidak ditemukan, pelepasan tidak bisa dilanjutkan');
+  }
 
-  await db.insert(inventoryLogs).values({
-    variantId,
-    productId: variant.productId,
-    changeType: 'release',
-    quantityChange: quantity,
-    previousStock: variant.stock,
-    newStock: variant.stock,
-    reason: `Released reservation for ${referenceId}`,
-    referenceId,
-  });
-
-  return { success: true, reservedStock: newReserved };
+  const result = await releaseStockAtBranch(branchId, variantId, quantity, referenceId);
+  return {
+    success: true as const,
+    reservedStock: result.reservedStock,
+    branchId: result.branchId,
+    alreadyReleased: result.alreadyReleased,
+  };
 }

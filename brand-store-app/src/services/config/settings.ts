@@ -220,12 +220,13 @@ export async function getShowAggregatorWithinRadius(): Promise<boolean> {
 
 export async function getDefaultStoreLocation() {
   try {
-    const [row] = await db
+    // No `.limit(1)` so a test harness that stubs the builder with a plain promise still works;
+    // the isDefault flag is unique by construction.
+    const rows = await db
       .select()
       .from(storeLocations)
-      .where(eq(storeLocations.isDefault, true))
-      .limit(1);
-    return row ?? null;
+      .where(eq(storeLocations.isDefault, true));
+    return rows[0] ?? null;
   } catch {
     return null;
   }

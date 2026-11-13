@@ -63,6 +63,7 @@
       "src/services/auth/socialAuthService.ts",
       "src/services/branch/branchAvailabilityService.ts",
       "src/services/branch/branchInventoryService.ts",
+      "src/services/branch/branchReservationService.ts",
       "src/services/branch/branchScope.ts",
       "src/services/branch/branchStockService.ts",
       "src/services/branch/branchValidation.ts",
@@ -109,6 +110,7 @@
       "src/tests/app.test.ts",
       "src/tests/auth.test.ts",
       "src/tests/branchAvailability.test.ts",
+      "src/tests/branchReservation.test.ts",
       "src/tests/branchRoutes.test.ts",
       "src/tests/branchScope.test.ts",
       "src/tests/branchStock.test.ts",
@@ -175,8 +177,8 @@
     "image": [],
     "video": []
   },
-  "total_files": 167,
-  "total_words": 89593,
+  "total_files": 169,
+  "total_words": 91888,
   "needs_graph": true,
   "warning": null,
   "skipped_sensitive": [
@@ -186,7 +188,7 @@
   "graphifyignore_patterns": 0,
   "git": {
     "source_owner": "git",
-    "source_hash": "289476545bf80709d71a5425997d691a19e3500d",
+    "source_hash": "89a8957ff5be7caa3643079b51a73ebc93c98686",
     "branches": [
       "backup/pre-secret-clean-main",
       "backup/pre-secret-clean-recovery",
@@ -204,9 +206,9 @@
     "source": "default-auto",
     "root": ".",
     "git_root": "..",
-    "head": "289476545bf80709d71a5425997d691a19e3500d",
-    "candidate_count": 440,
-    "included_count": 167,
+    "head": "89a8957ff5be7caa3643079b51a73ebc93c98686",
+    "candidate_count": 449,
+    "included_count": 169,
     "excluded_untracked_count": 2,
     "excluded_ignored_count": 20618,
     "excluded_sensitive_count": 2,

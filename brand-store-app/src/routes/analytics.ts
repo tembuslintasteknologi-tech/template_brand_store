@@ -3,6 +3,7 @@ import { db } from '../db/index.js';
 import { orders, orderItems, products, users } from '../db/schema.js';
 import { authMiddleware, adminOnlyMiddleware } from '../middleware/auth.js';
 import { sql, desc, eq, sum, count } from 'drizzle-orm';
+import { branchAnalyticsReport, BranchAnalyticsError } from '../services/admin/branchAnalytics.js';
 
 export const analyticsRoutes = new Hono();
 
@@ -103,5 +104,28 @@ analyticsRoutes.get('/reports/products', async (c) => {
     });
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
+  }
+});
+
+// GET /api/admin/analytics/branches - Cross-branch analytics for pusat (BR-012)
+analyticsRoutes.get('/analytics/branches', async (c) => {
+  try {
+    const { from, to } = c.req.query();
+    const report = await branchAnalyticsReport(from, to);
+
+    return c.json({
+      success: true,
+      data: {
+        reportType: 'branch_analytics',
+        ...report,
+      },
+    });
+  } catch (err: any) {
+    const status = err instanceof BranchAnalyticsError ? err.status : 500;
+    const code = err instanceof BranchAnalyticsError ? err.code : 'ANALYTICS_FAILED';
+    return c.json(
+      { success: false, error: { code, message: err?.message ?? 'Branch analytics failed' } },
+      status as any
+    );
   }
 });

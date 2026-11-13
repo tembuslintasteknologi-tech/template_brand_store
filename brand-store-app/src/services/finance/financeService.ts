@@ -15,6 +15,12 @@ export class FinanceError extends Error {
 export const REVENUE_STATUSES = ['paid', 'processing', 'shipped', 'delivered'];
 export const EXCLUDED_STATUSES = ['cancelled', 'expired', 'pending'];
 
+/**
+ * Refund rows only count once they are actually settled. BR-012 reuses this list so branch
+ * analytics and the finance summary can never drift apart on what a refund is.
+ */
+export const REFUND_SETTLED_STATUSES = ['approved', 'processed', 'completed', 'succeeded'];
+
 export interface FinanceOrderRow {
   status: string;
   totalAmount: string | number;
@@ -107,7 +113,7 @@ export function computeFinancialSummary(
 
   let refundedTotal = 0;
   for (const row of refundRows) {
-    if (!['approved', 'processed', 'completed', 'succeeded'].includes(row.status)) continue;
+    if (!REFUND_SETTLED_STATUSES.includes(row.status)) continue;
     const amount = num(row.amount);
     refundedTotal += amount;
 

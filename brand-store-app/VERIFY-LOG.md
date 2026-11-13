@@ -698,3 +698,67 @@ Catatan kontrak:
     disambungkan ke alur order.
   - Jalur 200 reservasi butuh Postgres hidup, jadi blok ini hanya membuktikan lapisan service
     lewat database mock dan test murni.
+
+---
+2026-11-14 (lanjutan 6)
+Task: BR-012 analitik pusat lintas cabang
+Jenis perubahan: service + route + test. Satu baris checklist Fase 2.5 dicentang.
+File yang berubah:
+  A  src/services/admin/branchAnalytics.ts        (resolveAnalyticsWindow, buildBranchAnalytics,
+                                                   branchAnalyticsReport, tipe laporan)
+  M  src/services/finance/financeService.ts       (REFUND_SETTLED_STATUSES diekspor dan dipakai
+                                                   bersama, tidak ada perubahan perilaku)
+  M  src/routes/analytics.ts                      (GET /analytics/branches di bawah guard admin)
+  A  src/tests/branchAnalytics.test.ts            (10 test)
+  M  TASK-CHECKLIST.md                            (BR-012 jadi [x])
+  M  VERIFY-LOG.md                                (blok ini)
+Command:
+  npx tsc --noEmit
+Output:
+  TSC_EXIT=0
+Command:
+  node --import tsx/esm --test "src/tests/branchAnalytics.test.ts"
+Output:
+  # tests 10
+  # pass 10
+  # fail 0
+Command:
+  npm test
+Output:
+  # tests 397
+  # suites 42
+  # pass 397
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+Baseline blok sebelumnya 387 test / 42 suite, jadi ada 10 test baru. Jumlah suite tidak naik
+karena test baru memakai top-level test, sama seperti adminCore.test.ts.
+Catatan kontrak:
+  - GET /api/v1/admin/analytics/branches menerima query from dan to opsional. Tanpa keduanya
+    jendela default 30 hari terakhir, sama dengan laporan finance. Tanggal rusak ditolak
+    INVALID_DATE dan rentang terbalik ditolak INVALID_DATE_RANGE, keduanya 400.
+  - Penjualan hanya menghitung order berstatus REVENUE_STATUSES (paid, processing, shipped,
+    delivered). Order pending, cancelled, dan expired tetap tidak masuk omzet walau punya baris
+    item, jadi angka cabang konsisten dengan financialSummary.
+  - orderCount adalah jumlah order distinct yang punya penjualan di cabang itu. Rollup menghitung
+    distinct lagi dari seluruh baris, jadi order yang memakai dua cabang tidak terhitung dua kali.
+    AOV = grossSales / orderCount dan dibulatkan dua desimal.
+  - Refund memakai REFUND_SETTLED_STATUSES yang sekarang satu sumber di financeService.ts.
+    Refund hanya masuk ke cabang kalau semua baris order itu berasal dari satu cabang. Order
+    multi cabang masuk unallocatedRefundTotal karena baris refund sendiri tidak menyimpan cabang,
+    dan membaginya dengan asumsi akan mengarang angka.
+  - Baris order lama tanpa source_branch_id jatuh ke cabang pusat lewat fallbackBranchId. Kalau
+    cabang pusat tidak ada, baris itu tidak masuk cabang mana pun tetapi tetap dihitung di rollup
+    dan dilaporkan sebagai unassignedSales.
+  - Stok di bawah ambang memakai stockStatus BR-004. Baris dengan available 0 masuk out_of_stock,
+    available <= threshold masuk low_stock, dan yang sehat tidak ditampilkan. Daftar diurutkan
+    dari available terkecil lalu nama.
+  - Cabang aktif yang belum punya order tetap muncul dengan angka nol, dan urutan baris menaruh
+    pusat lebih dulu. Rollup membawa branchCount, orderCount, itemCount, grossSales, refundedTotal,
+    netSales, averageOrderValue, unallocatedRefundTotal, unassignedSales, dan lowStockCount.
+  - Route berada di grup analyticsRoutes yang sudah dipasang di /admin, jadi path penuhnya
+    /api/v1/admin/analytics/branches. branch_admin ditolak 403 oleh adminOnlyMiddleware yang
+    memang hanya meloloskan role admin. Test membuktikan 401 tanpa token dan 403 untuk branch_admin.
+  - Jalur 200 butuh Postgres hidup, jadi blok ini membuktikan aturan lewat fungsi murni dan
+    penjagaan route lewat HTTP 401/403, bukan smoke check data nyata.

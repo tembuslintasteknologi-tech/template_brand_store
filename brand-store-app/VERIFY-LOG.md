@@ -933,3 +933,72 @@ Catatan:
     langsung di DB sampai endpoint provisioning cabang ada.
   - Jalur 200 tetap butuh Postgres hidup. Bukti di blok ini adalah aturan murni data seed
     plus suite penuh, bukan smoke check terhadap database nyata.
+---
+2026-11-14 (lanjutan 10)
+Task: BR-016 verifikasi akhir fase cabang
+Jenis perubahan: verifikasi + dokumentasi (tanpa perubahan source).
+File yang berubah:
+  M  TASK-CHECKLIST.md   (BR-016 jadi [x])
+  M  VERIFY-LOG.md       (blok ini)
+Command:
+  npx tsc --noEmit
+Output:
+  TSC_EXIT=0
+Command:
+  npm test
+Output:
+  # tests 445
+  # suites 51
+  # pass 445
+  # fail 0
+  # cancelled 0
+  # skipped 0
+Command:
+  node --import tsx/esm --test per file test baru
+Output:
+  branchStock          # tests 15
+  deliveryMode         # tests 20
+  stockTransfer        # tests 19
+  branchScope          # tests 10
+  branchAvailability   # tests 18
+  orderSource          # tests 18
+  shippingOptions      # tests 20
+  checkoutApi          # tests 4
+  branchDashboard      # tests 13
+  branchReservation    # tests 12
+  branchAnalytics      # tests 10
+  seedBranches         # tests 16
+Command:
+  node --import tsx/esm scripts/tmp-smoke-branch.ts   (script sementara, dihapus setelah run)
+Output:
+  --- public ---
+  public branches         | GET  /api/v1/products/kaos-tembus-demo/branches | 500 | password authentication failed for user "postgres"
+  public products         | GET  /api/v1/products                            | 500 | password authentication failed for user "postgres"
+  --- guarded, no token ---
+  shipping                | GET  /api/v1/shipping/options?branchId=x         | 401 | UNAUTHORIZED
+  checkout                | POST /api/v1/checkout                            | 401 | UNAUTHORIZED
+  branch inventory        | GET  /api/v1/branch/inventory                    | 401 | UNAUTHORIZED
+  branch dashboard        | GET  /api/v1/branch/dashboard                    | 401 | UNAUTHORIZED
+  admin branches          | GET  /api/v1/admin/branches                      | 401 | UNAUTHORIZED
+  admin transfers         | GET  /api/v1/admin/stock-transfers               | 401 | UNAUTHORIZED
+  --- guarded, customer token ---
+  branch inventory/customer | GET /api/v1/branch/inventory                  | 403 | admin or branch_admin role required
+  admin branches/customer   | GET /api/v1/admin/branches                    | 403 | Admin access required
+  --- guarded, presale validation ---
+  shipping missing branchId | GET /api/v1/shipping/options                 | 400 | BRANCH_REQUIRED
+  checkout missing branchId | POST /api/v1/checkout                        | 400 | BRANCH_REQUIRED
+  --- unknown ---
+  unknown                 | GET  /api/v1/does-not-exist-br016               | 404 | NOT_FOUND
+Kontrak mount route di app.ts:
+  api.route('/products', productRoutes)      -> GET /:slug/branches publik (BR-007)
+  api.route('/shipping', shippingRoutes)     -> GET /options (BR-010)
+  api.route('/checkout', checkoutRoutes)     -> POST / (BR-010)
+  api.route('/branch', branchRoutes)         -> inventory, logs, dashboard, stok (BR-006, BR-013)
+  api.route('/admin', adminBranchRoutes)     -> branches, stock-transfers (BR-005, BR-014)
+Catatan:
+  - Smoke check dijalankan tanpa Postgres. Angka 500 pada route publik adalah bukti route
+    benar-benar ter-mount, bukan bukti fungsional. Jalur 200 tetap butuh DB hidup.
+  - Minimum empat file test baru terpenuhi berkali lipat. Empat yang diminta checklist
+    (branchStock, deliveryMode, stockTransfer, branchScope) semuanya ada dan hijau.
+  - Script smoke sementara dihapus setelah dipakai, jadi tidak ada file sekali pakai yang
+    ikut ter-commit.

@@ -869,3 +869,67 @@ Catatan:
     unjournaled yang sama seperti 0007. Jalur nyata tetap db:push.
   - Jalur 200 butuh Postgres hidup. Bukti di blok ini adalah aturan murni (state machine,
     validasi, konservasi stok) plus penjagaan HTTP 401/403/400/409 yang berjalan tanpa DB.
+
+---
+2026-11-14 (lanjutan 9)
+Task: BR-015 seed dan dokumentasi cabang
+Jenis perubahan: seed data + dokumentasi + test.
+File yang berubah:
+  A  src/db/seedData.ts                     (data seed murni: cabang, katalog, rencana stok)
+  A  src/tests/seedBranches.test.ts         (16 test)
+  M  src/db/seed.ts                         (seed idempoten pusat + 2 cabang + inventory)
+  M  package.json                           (script db:seed)
+  M  API-DOCS.md                            (alur multi cabang, opsi kirim, checkout, error)
+  M  TASK-CHECKLIST.md                      (BR-015 jadi [x])
+  M  VERIFY-LOG.md                          (blok ini)
+Command:
+  npx tsc --noEmit
+Output:
+  TSC_EXIT=0
+Command:
+  node --import tsx/esm --test "src/tests/seedBranches.test.ts"
+Output:
+  # tests 16
+  # pass 16
+  # fail 0
+Command:
+  npm test
+Output:
+  # tests 445
+  # suites 51
+  # pass 445
+  # fail 0
+  # cancelled 0
+  # skipped 0
+Baseline blok sebelumnya 429 test / 47 suite, jadi ada 16 test baru dan 4 suite baru
+(suite bertambah juga dari pekerjaan BR-015 pada file lain yang sudah ikut terhitung).
+Kontrak seed:
+  - Pusat memakai kode PUSAT, mengikuti unifiedConfig.storeOrigin untuk nama, kota,
+    provinsi, dan alamat, dengan koordinat -6.2088 / 106.8456 dan radius 15.
+  - Cabang contoh CBG-BDG (Bandung, -6.9218 / 107.6071, radius 15) dan CBG-SBY
+    (Surabaya, -7.2575 / 112.7521, radius 20), keduanya aktif dan bukan default.
+  - Rencana stok DEMO_STOCK_BY_CODE = { PUSAT: 50, CBG-BDG: 12, CBG-SBY: 8 } untuk varian
+    DEMO-KAOS-001-M, agregat 70. branch_inventory adalah sumber kebenaran, lalu
+    product_variants.stock dan products.stock dihitung ulang dari sana.
+  - Insert inventory memakai onConflictDoNothing pada unique index branch+variant, jadi
+    rerun seed tidak mengembalikan stok lokal ke rencana demo.
+  - Upsert cabang memakai code sebagai kunci. Baris default lama tanpa code diklaim, bukan
+    diduplikasi, supaya tidak muncul "Main Warehouse" baru setiap rerun.
+  - Katalog demo: slug kaos-tembus-demo, SKU DEMO-KAOS-001, varian DEMO-KAOS-001-M,
+    harga 149000.00, status published, low stock threshold 5.
+Cakupan dokumentasi:
+  - Alur customer: GET /api/v1/products/{slug}/branches lalu
+    GET /api/v1/shipping/options lalu POST /api/v1/checkout, lengkap dengan contoh body.
+  - Aturan mode: tanpa koordinat tujuan hanya aggregator (OD-C), di luar radius hanya
+    aggregator, di dalam radius ondemand muncul dan 3PL tetap tampil sebagai pembanding
+    (OD-B, setting shipping.showAggregatorWithinRadius).
+  - Aturan checkout: branchId wajib, satu checkout satu cabang, selectedService wajib untuk
+    aggregator, harga ongkir di-quote ulang, total = items + shipping - discount.
+  - Tabel kode error storefront dan daftar keputusan terbuka.
+Catatan:
+  - Seed tidak membuat akun branch_admin dengan password default. Satu-satunya route role
+    adalah POST /api/v1/admin/users/{id}/role dan itu hanya menerima admin atau customer,
+    belum branch_admin dan belum bisa mengisi users.branch_id. Akun cabang masih dibuat
+    langsung di DB sampai endpoint provisioning cabang ada.
+  - Jalur 200 tetap butuh Postgres hidup. Bukti di blok ini adalah aturan murni data seed
+    plus suite penuh, bukan smoke check terhadap database nyata.

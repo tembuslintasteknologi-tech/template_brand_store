@@ -762,3 +762,58 @@ Catatan kontrak:
     memang hanya meloloskan role admin. Test membuktikan 401 tanpa token dan 403 untuk branch_admin.
   - Jalur 200 butuh Postgres hidup, jadi blok ini membuktikan aturan lewat fungsi murni dan
     penjagaan route lewat HTTP 401/403, bukan smoke check data nyata.
+
+---
+2026-11-14 (lanjutan 7)
+Task: BR-013 dashboard cabang
+Jenis perubahan: service + route + test + satu perbaikan aturan refund BR-012.
+File yang berubah:
+  A  src/services/branch/branchDashboard.ts        (buildBranchDashboard murni,
+                                                   branchDashboardReport, BranchDashboardError)
+  A  src/tests/branchDashboard.test.ts             (13 test)
+  M  src/routes/branches.ts                        (GET /branch/dashboard di grup branchRoutes)
+  M  src/services/admin/branchAnalytics.ts         (refund tidak diatribusikan kalau order punya
+                                                   baris tanpa cabang atau cabang di luar daftar)
+  M  TASK-CHECKLIST.md                             (BR-013 jadi [x])
+  M  VERIFY-LOG.md                                 (blok ini)
+Command:
+  npx tsc --noEmit
+Output:
+  TSC_EXIT=0
+Command:
+  node --import tsx/esm --test "src/tests/branchDashboard.test.ts"
+Output:
+  # tests 13
+  # pass 13
+  # fail 0
+Command:
+  npm test
+Output:
+  # tests 410
+  # suites 44
+  # pass 410
+  # fail 0
+Baseline blok sebelumnya 397 test / 42 suite, jadi ada 13 test baru dan 2 suite baru.
+Catatan kontrak:
+  - GET /api/v1/branch/dashboard menerima query from dan to opsional. Tanpa keduanya jendela
+    default 30 hari terakhir lewat resolveAnalyticsWindow BR-012. Tanggal rusak ditolak
+    INVALID_DATE dan rentang terbalik ditolak INVALID_DATE_RANGE, keduanya 400, dan keduanya
+    ditolak sebelum database disentuh.
+  - branchId tidak pernah dibaca dari body. requireBranchScope menyimpannya di context dari
+    sesi: branch_admin selalu memakai users.branch_id, admin pusat harus menyebut X-Branch-Id.
+    Admin pusat tanpa header menerima BRANCH_REQUIRED 400, bukan diam-diam membaca semua cabang.
+    branch_admin tanpa cabang menerima BRANCH_SCOPE_MISSING 403, dan branch_admin yang menunjuk
+    cabang lain menerima BRANCH_SCOPE_MISMATCH 403.
+  - Penjualan, jumlah item, order distinct, retur, netSales, AOV, dan daftar low stock memakai
+    buildBranchAnalytics yang sama dengan BR-012. Tidak ada rumus kedua yang bisa menyimpang.
+  - Refund hanya masuk kalau semua baris order milik cabang ini. Supaya tidak mengarang angka,
+    dua kasus tambahan sekarang masuk unattributedRefundTotal: order yang punya baris tanpa
+    source_branch_id, dan order yang punya baris menunjuk cabang di luar daftar yang dikirim.
+    Perubahan ini ada di branchAnalytics.ts dan tidak mengubah hasil BR-012 untuk cabang yang
+    ada di daftar, karena semua test BR-012 tetap lulus.
+  - Reservasi aktif adalah branch_inventory.reserved_stock > 0 untuk cabang itu, diurutkan dari
+    reserved_stock terbesar lalu nama. available = max(0, stock - reserved). reservedQuantity
+    adalah jumlah reserved_stock seluruh baris aktif.
+  - Cabang tanpa order tetap mengembalikan dashboard dengan angka nol dan daftar kosong.
+  - Jalur 200 butuh Postgres hidup, jadi blok ini membuktikan aturan lewat fungsi murni dan
+    penjagaan scope lewat HTTP 401/403/400, bukan smoke check data nyata.

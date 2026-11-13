@@ -16,6 +16,11 @@ import {
 } from '../services/branch/branchInventoryService.js';
 import { BranchStockError } from '../services/branch/branchStockService.js';
 import { BranchValidationError } from '../services/branch/branchValidation.js';
+import {
+  BranchDashboardError,
+  branchDashboardReport,
+} from '../services/branch/branchDashboard.js';
+import { BranchAnalyticsError } from '../services/admin/branchAnalytics.js';
 
 function actorId(c: any): string {
   return (c.get('user') as { id: string }).id;
@@ -113,6 +118,37 @@ function scopedBranchId(c: any): string | null {
   const scope = c.get('branchScope') as { branchId: string | null } | undefined;
   return scope?.branchId ?? null;
 }
+
+// GET /api/v1/branch/dashboard - branch scoped KPI dashboard (BR-013)
+branchRoutes.get('/dashboard', async (c) => {
+  try {
+    const branchId = scopedBranchId(c);
+    if (!branchId) {
+      return c.json(
+        { success: false, error: { code: 'BRANCH_REQUIRED', message: 'Pilih cabang lewat header X-Branch-Id' } },
+        400
+      );
+    }
+
+    const { from, to } = c.req.query();
+    const report = await branchDashboardReport(branchId, from, to);
+    return c.json({ success: true, data: { reportType: 'branch_dashboard', ...report } });
+  } catch (err: any) {
+    if (err instanceof BranchDashboardError) {
+      return c.json(
+        { success: false, error: { code: err.code, message: err.message } },
+        err.status as any
+      );
+    }
+    if (err instanceof BranchAnalyticsError) {
+      return c.json(
+        { success: false, error: { code: err.code, message: err.message } },
+        err.status as any
+      );
+    }
+    return fail(c, err);
+  }
+});
 
 // GET /api/v1/branch/inventory
 branchRoutes.get('/inventory', async (c) => {

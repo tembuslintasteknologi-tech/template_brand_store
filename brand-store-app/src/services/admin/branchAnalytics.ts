@@ -256,9 +256,17 @@ export function buildBranchAnalytics(input: BuildBranchAnalyticsInput): {
   }
 
   const orderBranches = new Map<string, Set<string>>();
+  const unresolvedOrders = new Set<string>();
+  const otherBranchOrders = new Set<string>();
   for (const line of input.orderBranches ?? []) {
     const branchId = resolveBranchId(line.branchId);
-    if (!branchId) continue;
+    if (!branchId) {
+      // A missing branch id or a branch outside the supplied list makes the whole order ambiguous
+      // for refund allocation. Guessing would put another branch's money on this one.
+      if (line.branchId) otherBranchOrders.add(line.orderId);
+      else unresolvedOrders.add(line.orderId);
+      continue;
+    }
     const bucket = orderBranches.get(line.orderId) ?? new Set<string>();
     bucket.add(branchId);
     orderBranches.set(line.orderId, bucket);
@@ -271,6 +279,11 @@ export function buildBranchAnalytics(input: BuildBranchAnalyticsInput): {
 
     const amount = num(refund.amount);
     refundedTotal += amount;
+
+    if (unresolvedOrders.has(refund.orderId) || otherBranchOrders.has(refund.orderId)) {
+      unallocatedRefundTotal += amount;
+      continue;
+    }
 
     const branches = orderBranches.get(refund.orderId);
     if (!branches || branches.size !== 1) {

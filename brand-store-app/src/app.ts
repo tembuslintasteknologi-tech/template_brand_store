@@ -19,6 +19,7 @@ import { contentAdminRoutes, contentPublicRoutes } from './routes/content.js';
 import { notificationRoutes, notificationAdminRoutes } from './routes/notifications.js';
 import { promoRoutes } from './routes/promos.js';
 import { checkoutRoutes } from './routes/checkout.js';
+import { shippingRoutes } from './routes/shipping.js';
 import { paymentRoutes } from './routes/payments.js';
 import { logisticsRoutes, logisticsWebhookRoutes } from './routes/logistics.js';
 import { reviewAdminRoutes, reviewPublicRoutes } from './routes/reviews.js';
@@ -113,6 +114,7 @@ export function createApp() {
   api.route('/orders', orderRoutes);
   api.route('/promos', promoRoutes);
   api.route('/checkout', checkoutRoutes);
+  api.route('/shipping', shippingRoutes);
   api.route('/payments', paymentRoutes);
   api.route('/logistics', logisticsRoutes);
   api.route('/admin', analyticsRoutes);

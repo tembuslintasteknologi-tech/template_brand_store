@@ -570,3 +570,64 @@ Catatan:
     order bisa jadi beberapa shipment (OD-A belum final).
   - Jalur 200 POST /api/v1/orders dan pembuatan shipment tetap butuh Postgres hidup, jadi tidak
     ada smoke check HTTP di blok ini. Yang diuji adalah lapisan keputusan murni.
+---
+2026-11-12 (lanjutan 4)
+Task: BR-010 opsi kirim dan pemilihan 3PL
+Jenis perubahan: service + route + validator + refactor order creation + test. Satu baris
+checklist Fase 2.5 dicentang.
+File yang berubah:
+  A  src/services/shipping/shippingOptionsService.ts (assembleShippingOptions,
+                                                     resolveSelectedShippingOption,
+                                                     listShippingOptions,
+                                                     DEFAULT_PARCEL_WEIGHT_GRAMS = 1000)
+  A  src/services/order/orderCreateService.ts      (createOrderWithItems dipakai dua route)
+  A  src/routes/shipping.ts                        (GET /options, auth + Cache-Control: no-store)
+  A  src/tests/shippingOptions.test.ts             (20 test, 3 suite)
+  M  src/routes/checkout.ts                        (POST / baru: kutip ulang opsi, pilih service,
+                                                    buat order dari service bersama)
+  M  src/routes/orders.ts                          (isi body pindah ke createOrderWithItems,
+                                                    kontrak respons tidak berubah)
+  M  src/validators/schemas.ts                     (checkoutSchema, koordinat opsional di
+                                                    orderSchema.shippingAddress)
+  M  src/app.ts                                    (mount api.route('/shipping', ...))
+  M  TASK-CHECKLIST.md                             (BR-010 jadi [x])
+  M  VERIFY-LOG.md                                 (blok ini)
+Command:
+  npx tsc --noEmit
+Output:
+  TSC_EXIT=0
+Command:
+  npm test
+Output:
+  # tests 375
+  # suites 42
+  # pass 375
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+Baseline blok sebelumnya 355 test / 39 suite, jadi ada 20 test baru dan 3 suite baru
+(seluruhnya di shippingOptions.test.ts).
+Catatan kontrak:
+  - GET /api/v1/shipping/options query: branchId (wajib), addressId (discope ke customerId
+    pemilik token), city, postalCode, latitude, longitude, weightGrams, value, cod. Respons
+    membawa branch, destination, modes, reason, distanceKm, radiusKm, weightGrams, currency,
+    options[], unavailable[]. Tanpa koordinat tujuan modes = ['aggregator'] (OD-C), bukan error.
+  - POST /api/v1/checkout body = order body + branchId, addressId, selectedMode, selectedService,
+    weightGrams. Aturan pilih: tidak ada mode tapi ada service -> cocokkan service; ondemand
+    tanpa service -> opsi ondemand pertama; aggregator tanpa service -> 400
+    SHIPPING_SERVICE_REQUIRED; service di luar daftar -> 400 SHIPPING_SERVICE_NOT_AVAILABLE; mode
+    yang tidak ditawarkan cabang -> 400 SHIPPING_MODE_NOT_AVAILABLE.
+  - Satu checkout hanya boleh satu cabang (MULTI_BRANCH_CHECKOUT_UNSUPPORTED 400) selama OD-A
+    belum final. Item tanpa branchId dipin ke cabang pilihan, dan branchId yang hilang ditolak
+    BRANCH_REQUIRED 400.
+  - Harga kirim dikutip ulang saat checkout, bukan dipercaya dari klien. shipping_amount dan
+    total_amount ikut dihitung di service bersama, shipping_details menyimpan
+    { mode, provider, service, name, cost }.
+  - Provider gagal kutip dicatat ke unavailable[] dengan reason quote_failed (atau
+    no_coordinates / missing_destination_city / no_service), jadi 3PL tetap bisa dipakai saat
+    API ondemand mati. Endpoint tidak pernah 500 hanya karena satu provider down.
+  - orderCreateWithItems juga memetakan produk tidak ada dan stok kurang sebagai
+    OrderSourceError({ code, message }), bukan string bebas seperti sebelumnya.
+  - Jalur 200 untuk /options dan /checkout belum bisa di-smoke-test: butuh Postgres hidup plus
+    API courier. Yang diuji lapisan keputusan murni.

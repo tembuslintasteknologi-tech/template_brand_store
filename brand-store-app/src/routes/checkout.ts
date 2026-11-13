@@ -14,8 +14,111 @@ import { orders, orderItems } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { getTaxPercent } from '../services/config/settings.js';
 import { notifyOrderEvent } from '../services/notifications/orderNotifications.js';
+import { authMiddleware } from '../middleware/auth.js';
+import { checkoutSchema } from '../validators/schemas.js';
+import { OrderSourceError } from '../services/branch/orderSourceService.js';
+import { createOrderWithItems } from '../services/order/orderCreateService.js';
+import { listShippingOptions, resolveSelectedShippingOption } from '../services/shipping/shippingOptionsService.js';
 
 export const checkoutRoutes = new Hono();
+
+// POST /api/v1/checkout
+//
+// BR-010: the customer already picked a branch and a shipping option. Options are re-quoted
+// here so a stale price, a closed branch, or a service that disappeared cannot be checked out.
+// Only one branch per checkout while OD-A stays open.
+checkoutRoutes.post('/', authMiddleware, async (c) => {
+  try {
+    const user = c.get('user') as { id: string; role: string; email: string };
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = checkoutSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ success: false, error: parsed.error.format() }, 400);
+    }
+
+    const { items, shippingAddress, selectedMode, selectedService, addressId, weightGrams } =
+      parsed.data;
+
+    const branchId = parsed.data.branchId ?? items.find((item) => item.branchId)?.branchId ?? null;
+    if (!branchId) {
+      throw new OrderSourceError(
+        'BRANCH_REQUIRED',
+        'branchId wajib diisi. Checkout harus tahu cabang mana yang mengirim.'
+      );
+    }
+
+    if (items.some((item) => item.branchId && item.branchId !== branchId)) {
+      throw new OrderSourceError(
+        'MULTI_BRANCH_CHECKOUT_UNSUPPORTED',
+        'Satu checkout hanya boleh berisi produk dari satu cabang. Pisahkan jadi dua order.'
+      );
+    }
+
+    const options = await listShippingOptions({
+      branchId,
+      addressId,
+      customerId: user.id,
+      destination: {
+        city: shippingAddress.city,
+        postalCode: shippingAddress.postalCode,
+        latitude: shippingAddress.latitude ?? null,
+        longitude: shippingAddress.longitude ?? null,
+      },
+      weightGrams: weightGrams ?? null,
+    });
+
+    const selected = resolveSelectedShippingOption(options.options, {
+      selectedMode,
+      selectedService,
+    });
+
+    const created = await createOrderWithItems({
+      customerId: user.id,
+      // Every line is pinned to the chosen branch, including legacy lines that arrived without
+      // one, because checkout has already decided which branch ships this order.
+      items: items.map((item) => ({ ...item, branchId })),
+      shippingAddress,
+      shippingAmount: selected.cost,
+      shipping: {
+        mode: selected.mode,
+        provider: selected.provider,
+        service: selected.service,
+        name: selected.name,
+        cost: selected.cost,
+      },
+      enforceSingleBranch: true,
+    });
+
+    return c.json(
+      {
+        success: true,
+        data: {
+          orderId: created.orderId,
+          orderNumber: created.orderNumber,
+          itemsTotal: created.itemsTotal,
+          shippingAmount: created.shippingAmount,
+          totalAmount: created.totalAmount,
+          status: created.status,
+          fulfillmentSource: created.fulfillmentSource,
+          shipments: created.shipments,
+          shipping: selected,
+          branch: options.branch,
+          availableModes: options.modes,
+          distanceKm: options.distanceKm,
+        },
+      },
+      201
+    );
+  } catch (err: any) {
+    if (err instanceof OrderSourceError) {
+      return c.json(
+        { success: false, error: { code: err.code, message: err.message } },
+        err.status as any
+      );
+    }
+    return c.json({ success: false, error: err.message }, 500);
+  }
+});
 
 // GET cart
 checkoutRoutes.get('/cart/:id', (c) => {

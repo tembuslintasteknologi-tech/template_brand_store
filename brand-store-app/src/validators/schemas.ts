@@ -41,5 +41,22 @@ export const orderSchema = z.object({
     city: z.string(),
     province: z.string(),
     postalCode: z.string(),
+    // BR-010: optional so a client that knows the pin can send it. `user_addresses` has no
+    // coordinate column yet, so this is the only source for the ondemand distance check.
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
   }),
+});
+
+/**
+ * BR-010 checkout body. It is the order body plus the shipping selection. `selectedMode` and
+ * `selectedService` stay plain strings here so the service can answer with its own error codes
+ * (SHIPPING_SERVICE_REQUIRED, SHIPPING_SERVICE_NOT_AVAILABLE) instead of a zod blob.
+ */
+export const checkoutSchema = orderSchema.extend({
+  branchId: z.string().uuid().optional(),
+  addressId: z.string().uuid().optional(),
+  selectedMode: z.string().optional(),
+  selectedService: z.string().optional(),
+  weightGrams: z.number().int().positive().optional(),
 });

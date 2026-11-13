@@ -817,3 +817,55 @@ Catatan kontrak:
   - Cabang tanpa order tetap mengembalikan dashboard dengan angka nol dan daftar kosong.
   - Jalur 200 butuh Postgres hidup, jadi blok ini membuktikan aturan lewat fungsi murni dan
     penjagaan scope lewat HTTP 401/403/400, bukan smoke check data nyata.
+
+---
+2026-11-14 (lanjutan 8)
+Task: BR-014 transfer stok antar cabang
+Jenis perubahan: schema + migrasi + service + route + test.
+File yang berubah:
+  A  drizzle/0008_stock_transfers.sql             (tabel dan index, idempoten)
+  A  src/services/branch/stockTransferService.ts  (state machine murni + fungsi DB transaksi)
+  A  src/tests/stockTransfer.test.ts              (19 test)
+  M  src/db/schema.ts                             (export stockTransfers)
+  M  src/routes/branches.ts                       (5 route admin stok transfer + fail handler)
+  M  TASK-CHECKLIST.md                            (BR-014 jadi [x])
+  M  VERIFY-LOG.md                                (blok ini)
+Command:
+  npx tsc --noEmit
+Output:
+  TSC_EXIT=0
+Command:
+  node --import tsx/esm --test "src/tests/stockTransfer.test.ts"
+Output:
+  # tests 19
+  # pass 19
+  # fail 0
+Command:
+  npm test
+Output:
+  # tests 429
+  # suites 47
+  # pass 429
+  # fail 0
+Baseline blok sebelumnya 410 test / 44 suite, jadi ada 19 test baru dan 3 suite baru.
+Kontrak perilaku:
+  - Status hanya empat: draft, in_transit, received, cancelled.
+  - approve: draft tetap draft, hanya menstempel approved_by. Approve kedua ditolak
+    ALREADY_APPROVED 409.
+  - ship: hanya dari draft dan wajib sudah approve (APPROVAL_REQUIRED 409). Stok asal
+    berkurang tepat satu kali, log transfer_out ditulis, agregat product_variants.stock
+    dihitung ulang.
+  - receive: hanya dari in_transit. Stok tujuan bertambah tepat satu kali, log transfer_in
+    ditulis, agregat dihitung ulang. Baris stok tujuan dibuat kalau belum ada.
+  - cancel: hanya dari draft. Transfer in_transit tidak bisa dibatalkan, ini keputusan
+    terbuka yang dicatat di checklist.
+  - Kuantitas wajib bilangan bulat positif. Cabang asal dan tujuan wajib diisi dan berbeda.
+  - Hanya stok tersedia (stock - reserved) yang boleh keluar. Stok yang sedang direservasi
+    tidak bisa ditransfer.
+  - Row transfer dikunci FOR UPDATE di dalam transaksi sebelum transisi, supaya dua admin
+    tidak bisa ship atau receive baris yang sama dua kali.
+Catatan:
+  - drizzle/meta/_journal.json hanya memuat 0000 dan 0006, jadi 0008 mengikuti pola
+    unjournaled yang sama seperti 0007. Jalur nyata tetap db:push.
+  - Jalur 200 butuh Postgres hidup. Bukti di blok ini adalah aturan murni (state machine,
+    validasi, konservasi stok) plus penjagaan HTTP 401/403/400/409 yang berjalan tanpa DB.

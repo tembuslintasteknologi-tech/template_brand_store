@@ -17,6 +17,17 @@ import {
 import { BranchStockError } from '../services/branch/branchStockService.js';
 import { BranchValidationError } from '../services/branch/branchValidation.js';
 import {
+  StockTransferError,
+  approveStockTransfer,
+  assertDistinctBranches,
+  assertTransferQuantity,
+  cancelStockTransfer,
+  createStockTransfer,
+  listStockTransfers,
+  receiveStockTransfer,
+  shipStockTransfer,
+} from '../services/branch/stockTransferService.js';
+import {
   BranchDashboardError,
   branchDashboardReport,
 } from '../services/branch/branchDashboard.js';
@@ -36,6 +47,9 @@ function fail(c: any, err: any) {
   if (err instanceof BranchStockError) {
     const status = err.code === 'BRANCH_STOCK_NOT_FOUND' ? 404 : err.code === 'INSUFFICIENT_STOCK' ? 409 : 400;
     return c.json({ success: false, error: { code: err.code, message: err.message } }, status as any);
+  }
+  if (err instanceof StockTransferError) {
+    return c.json({ success: false, error: { code: err.code, message: err.message } }, err.status as any);
   }
   return c.json({ success: false, error: err?.message ?? 'failed' }, 500);
 }
@@ -109,6 +123,66 @@ adminBranchRoutes.post('/branches/:id/location', async (c) => {
     return fail(c, err);
   }
 });
+
+// GET /api/v1/admin/stock-transfers - list transfers, newest first (BR-014)
+adminBranchRoutes.get('/stock-transfers', async (c) => {
+  try {
+    const { status, branchId, limit } = c.req.query();
+    const rows = await listStockTransfers({
+      status,
+      branchId,
+      limit: Number(limit ?? 100),
+    });
+    return c.json({ success: true, data: rows });
+  } catch (err: any) {
+    return fail(c, err);
+  }
+});
+
+// POST /api/v1/admin/stock-transfers - create a draft transfer (BR-014)
+adminBranchRoutes.post('/stock-transfers', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+
+    // Validated before the database so a typo never depends on a live Postgres.
+    assertTransferQuantity(Number(body?.quantity));
+    assertDistinctBranches(body?.fromBranchId, body?.toBranchId);
+    if (typeof body?.variantId !== 'string' || !body.variantId.trim()) {
+      throw new StockTransferError('VARIANT_NOT_FOUND', 'variantId wajib diisi', 400);
+    }
+
+    const row = await createStockTransfer({
+      fromBranchId: body.fromBranchId.trim(),
+      toBranchId: body.toBranchId.trim(),
+      variantId: body.variantId.trim(),
+      quantity: Number(body.quantity),
+      note: typeof body?.note === 'string' ? body.note : undefined,
+      requestedBy: actorId(c),
+    });
+    return c.json({ success: true, data: row }, 201);
+  } catch (err: any) {
+    return fail(c, err);
+  }
+});
+
+const stockTransferActions = {
+  approve: approveStockTransfer,
+  ship: shipStockTransfer,
+  receive: receiveStockTransfer,
+  cancel: cancelStockTransfer,
+} as const;
+
+// POST /api/v1/admin/stock-transfers/:id/approve|ship|receive|cancel (BR-014)
+for (const action of ['approve', 'ship', 'receive', 'cancel'] as const) {
+  adminBranchRoutes.post(`/stock-transfers/:id/${action}`, async (c) => {
+    try {
+      const row = await stockTransferActions[action](c.req.param('id') as string, actorId(c));
+      return c.json({ success: true, data: row });
+    } catch (err: any) {
+      return fail(c, err);
+    }
+  });
+}
 
 /** Branch scoped stock endpoints. BR-006. */
 export const branchRoutes = new Hono();

@@ -36,8 +36,8 @@
     "hash": "c1737179fad1b1e7ff4e944cedbdbf6b"
   },
   "E:/TEMBUS LINTAS TEKNOLOGI/TEMPLATE WEB MARKETPLACE/brand-store-app/src/db/schema.ts": {
-    "mtime": 1794451836359.0752,
-    "hash": "9ffcbbd8c120eb56151c4d90d4ee9726"
+    "mtime": 1794592850143.8528,
+    "hash": "033ede8be12eb413f37702af02465012"
   },
   "E:/TEMBUS LINTAS TEKNOLOGI/TEMPLATE WEB MARKETPLACE/brand-store-app/src/db/seed.ts": {
     "mtime": 1794451520513.9011,
@@ -168,8 +168,8 @@
     "hash": "76d71a0a457ab71e8502f7fad33d7002"
   },
   "E:/TEMBUS LINTAS TEKNOLOGI/TEMPLATE WEB MARKETPLACE/brand-store-app/VERIFY-LOG.md": {
-    "mtime": 1794592717734.0813,
-    "hash": "773ccdde435950f43d44f32a04319a6e"
+    "mtime": 1794592973272.034,
+    "hash": "103c0f187659362f1db0697f19616538"
   },
   "E:/TEMBUS LINTAS TEKNOLOGI/TEMPLATE WEB MARKETPLACE/brand-store-app/pnpm-lock.yaml": {
     "mtime": 1794392894919.422,
@@ -492,8 +492,8 @@
     "hash": "cbd24ace8f48f0d9058ef835c03f1313"
   },
   "E:/TEMBUS LINTAS TEKNOLOGI/TEMPLATE WEB MARKETPLACE/brand-store-app/.engram/GRAPH_REPORT.md": {
-    "mtime": 1794592465966.084,
-    "hash": "615fa1f22bb06aa8adee2a9e3c313032"
+    "mtime": 1794592728557.447,
+    "hash": "9ea47ac37d8e16853106e8080d83352a"
   },
   "E:/TEMBUS LINTAS TEKNOLOGI/TEMPLATE WEB MARKETPLACE/brand-store-app/.engram/description-instructions/batch-000.md": {
     "mtime": 1794392894911.556,
@@ -608,8 +608,8 @@
     "hash": "bcf9a78bb06d21cd0a80d496f1a63eee"
   },
   "E:/TEMBUS LINTAS TEKNOLOGI/TEMPLATE WEB MARKETPLACE/brand-store-app/src/routes/branches.ts": {
-    "mtime": 1794592632073.223,
-    "hash": "aba1aa2e7417d00b8c06caca79edda3b"
+    "mtime": 1794592904493.392,
+    "hash": "5da47156b878351e2f470290f49b3f0a"
   },
   "E:/TEMBUS LINTAS TEKNOLOGI/TEMPLATE WEB MARKETPLACE/brand-store-app/src/services/branch/branchInventoryService.ts": {
     "mtime": 1794451168519.7654,
@@ -682,5 +682,13 @@
   "E:/TEMBUS LINTAS TEKNOLOGI/TEMPLATE WEB MARKETPLACE/brand-store-app/src/tests/branchAnalytics.test.ts": {
     "mtime": 1794592414026.54,
     "hash": "0cff1a527ea867e0a1af36d93648bc4a"
+  },
+  "E:/TEMBUS LINTAS TEKNOLOGI/TEMPLATE WEB MARKETPLACE/brand-store-app/src/services/branch/branchDashboard.ts": {
+    "mtime": 1794592622315.9834,
+    "hash": "e7020f8755456646dc3cd5173f946563"
+  },
+  "E:/TEMBUS LINTAS TEKNOLOGI/TEMPLATE WEB MARKETPLACE/brand-store-app/src/tests/branchDashboard.test.ts": {
+    "mtime": 1794592650076.1982,
+    "hash": "c2edc58954b4c7046622e0ed7f687f8e"
   }
 }

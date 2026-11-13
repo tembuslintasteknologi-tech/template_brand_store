@@ -125,6 +125,27 @@ export const branchInventory = pgTable('branch_inventory', {
   branchIdx: index('branch_inventory_branch_idx').on(table.branchId),
 }));
 
+export const stockTransfers = pgTable('stock_transfers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  fromBranchId: uuid('from_branch_id').references(() => storeLocations.id, { onDelete: 'cascade' }).notNull(),
+  toBranchId: uuid('to_branch_id').references(() => storeLocations.id, { onDelete: 'cascade' }).notNull(),
+  variantId: uuid('variant_id').references(() => productVariants.id, { onDelete: 'cascade' }).notNull(),
+  quantity: integer('quantity').notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('draft'), // 'draft' | 'in_transit' | 'received' | 'cancelled'
+  note: text('note'),
+  requestedBy: uuid('requested_by').references(() => users.id),
+  approvedBy: uuid('approved_by').references(() => users.id),
+  shippedAt: timestamp('shipped_at'),
+  receivedAt: timestamp('received_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  fromIdx: index('stock_transfers_from_idx').on(table.fromBranchId),
+  toIdx: index('stock_transfers_to_idx').on(table.toBranchId),
+  statusIdx: index('stock_transfers_status_idx').on(table.status),
+  variantIdx: index('stock_transfers_variant_idx').on(table.variantId),
+}));
+
 export const settings = pgTable('settings', {
   id: uuid('id').primaryKey().defaultRandom(),
   key: varchar('key', { length: 150 }).notNull().unique(),

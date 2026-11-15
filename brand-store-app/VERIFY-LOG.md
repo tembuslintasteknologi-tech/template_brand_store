@@ -1077,3 +1077,95 @@ Catatan:
     lewat serverError tanpa membocorkan detail driver.
   - Aturan domain (status, countdown, harga, stok, limit per user) diuji murni di
     flashSale.test.ts tanpa database, 54 test hijau.
+
+---
+2026-11-15 (lanjutan 12)
+Task: LTY Phase 3 item 2, modul Loyalty points dan tier (LTY-001, LTY-002, LTY-003, LTY-004)
+Jenis perubahan: fitur baru (service, repository, route, schema, migrasi, test, docs).
+File yang berubah:
+  A  src/services/loyalty/loyaltyService.ts
+  A  src/services/loyalty/loyaltyRepository.ts
+  A  src/routes/loyalty.ts
+  A  src/tests/loyalty.test.ts
+  A  drizzle/0010_loyalty.sql
+  M  src/db/schema.ts                      (tabel loyaltyAccounts + loyaltyTransactions)
+  M  src/services/config/settings.ts       (loyaltyProgramSettingSchema + registrasi validator)
+  M  src/app.ts                            (mount loyaltyRoutes + loyaltyAdminRoutes)
+  M  src/tests/databaseSchema.test.ts      (assert tabel loyalty + migrasi 0010)
+  M  API-DOCS.md                           (section Loyalty Points dan Tier)
+  M  TASK-CHECKLIST.md                     (baris loyalty jadi [x])
+  M  VERIFY-LOG.md                         (blok ini)
+Command:
+  npx tsc --noEmit
+Output:
+  TSC_EXIT=0
+Command:
+  node --import tsx/esm --test src/tests/loyalty.test.ts
+Output:
+  1..8
+  # tests 61
+  # suites 0
+  # pass 61
+  # fail 0
+  # duration_ms 254.9944
+Command:
+  node --import tsx/esm --test src/tests/databaseSchema.test.ts
+Output:
+  1..1
+  # tests 15
+  # suites 0
+  # pass 15
+  # fail 0
+  # duration_ms 700.9271
+Command:
+  npm test 2>&1 | Select-Object -Last 12
+Output:
+  1..235
+  # tests 562
+  # suites 51
+  # pass 562
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+  # duration_ms 6610.6966
+Command:
+  node --import tsx/esm scripts/tmp-smoke-loyalty.ts   (script sementara, sudah dihapus)
+Output:
+  --- route table (loyalty) ---
+  ALL  /api/v1/loyalty/*
+  GET  /api/v1/admin/loyalty/accounts
+  GET  /api/v1/admin/loyalty/accounts/:userId
+  GET  /api/v1/admin/loyalty/program
+  GET  /api/v1/loyalty
+  GET  /api/v1/loyalty/program
+  GET  /api/v1/loyalty/transactions
+  POST /api/v1/admin/loyalty/accounts/:userId/adjust
+  POST /api/v1/admin/loyalty/accounts/:userId/earn
+  POST /api/v1/loyalty/redeem
+  PUT  /api/v1/admin/loyalty/program
+  --- request ---
+  [404] GET /api/v1/loyalty/does-not-exist
+        {"success":false,"error":{"code":"NOT_FOUND","message":"No route matches GET /api/v1/loyalty/does-not-exist","requestId":"..."}}
+  [401] GET /api/v1/loyalty
+        {"success":false,"error":{"code":"UNAUTHORIZED","message":"Unauthorized: Missing or malformed token"}}
+  [200] GET /api/v1/loyalty/program
+        {"success":true,"data":{"tiers":[{"tier":"bronze","minLifetimePoints":0,"discountPercent":0,"freeShippingMinAmount":null},{"tier":"silver","minLifetimePoints":5...
+  [401] GET /api/v1/admin/loyalty/accounts
+        {"success":false,"error":{"code":"UNAUTHORIZED","message":"Unauthorized: Missing or malformed token"}}
+Catatan:
+  - Baris route yang tampil dobel (misal GET /api/v1/loyalty dan GET /api/v1/loyalty/transactions)
+    adalah artefak Hono, bukan pendaftaran ganda. Middleware inline dan handler akhir dicatat
+    sebagai dua entri. Pola yang sama sudah dibuktikan pada modul flash sale dengan app Hono
+    minimal. Request tetap dijawab sekali.
+  - GET /api/v1/loyalty/program membalas 200 tanpa Postgres hidup karena getSettingValue
+    menangkap error database dan mengembalikan fallback. Jadi endpoint ini memang bisa diuji
+    penuh tanpa DB, dan yang terlihat adalah DEFAULT_LOYALTY_PROGRAM.
+  - Jalur 200 untuk saldo, riwayat, redeem, dan listing admin belum terbukti karena Postgres
+    lokal menolak login (password authentication failed for user "postgres"). Yang terbukti:
+    route ter-mount, guard 401 jalan pada customer dan admin, feature gate loyalty terpasang,
+    dan path asing 404.
+  - Satu test sempat gagal saat pertama dijalankan, yaitu ekspektasi "menolak ambang turun".
+    Kode memang sengaja mengurutkan ulang tier sebelum memvalidasi, jadi ambang turun itu valid
+    dan dinormalkan. Yang salah test-nya, bukan implementasinya. Test diganti menjadi dua:
+    ambang kembar ditolak, ambang tidak berurutan diterima dan diurutkan naik.

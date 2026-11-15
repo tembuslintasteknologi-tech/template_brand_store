@@ -599,6 +599,53 @@ export const reviews = pgTable('reviews', {
 }));
 
 // ---------------------------------------------------------------------------
+// LOYALTY (LTY-001..004)
+// ---------------------------------------------------------------------------
+export const loyaltyAccounts = pgTable('loyalty_accounts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull().unique(),
+  balance: integer('balance').notNull().default(0),
+  lifetimePoints: integer('lifetime_points').notNull().default(0),
+  // Cached projection of lifetimePoints. Every write path recomputes it from the tier rules,
+  // so this column never decides a tier on its own.
+  tier: varchar('tier', { length: 20 }).notNull().default('bronze'),
+  tierUpdatedAt: timestamp('tier_updated_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  userIdx: uniqueIndex('loyalty_accounts_user_idx').on(table.userId),
+  tierIdx: index('loyalty_accounts_tier_idx').on(table.tier),
+}));
+
+export const loyaltyTransactions = pgTable('loyalty_transactions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  accountId: uuid('account_id').references(() => loyaltyAccounts.id, { onDelete: 'cascade' }).notNull(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  type: varchar('type', { length: 20 }).notNull(), // 'earn', 'redeem', 'adjust', 'expire'
+  source: varchar('source', { length: 20 }), // 'purchase', 'review', 'referral' for earn
+  points: integer('points').notNull(), // signed: positive credits, negative debits
+  balanceBefore: integer('balance_before').notNull(),
+  balanceAfter: integer('balance_after').notNull(),
+  referenceType: varchar('reference_type', { length: 50 }),
+  referenceId: varchar('reference_id', { length: 100 }),
+  note: text('note'),
+  actorId: uuid('actor_id').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  accountIdx: index('loyalty_tx_account_idx').on(table.accountId),
+  userIdx: index('loyalty_tx_user_idx').on(table.userId),
+  typeIdx: index('loyalty_tx_type_idx').on(table.type),
+  createdIdx: index('loyalty_tx_created_idx').on(table.createdAt),
+  // One earn per source document. A retried purchase webhook cannot credit twice. Postgres
+  // treats NULL reference_id values as distinct, so manual adjustments stay unrestricted.
+  earnRefIdx: uniqueIndex('loyalty_tx_earn_ref_idx').on(
+    table.userId,
+    table.source,
+    table.referenceId
+  ),
+}));
+
+// ---------------------------------------------------------------------------
 // WALLETS
 // ---------------------------------------------------------------------------
 export const wallets = pgTable('wallets', {

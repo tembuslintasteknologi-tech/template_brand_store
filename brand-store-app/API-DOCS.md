@@ -323,3 +323,102 @@ user.
   daftar Phase 3 di checklist.
 - Sale yang dinonaktifkan di tengah jalan tidak mengembalikan stok yang sudah terjual. Stok
   dikembalikan hanya lewat pembatalan order, dan alur itu belum ada di modul ini.
+
+---
+
+## Loyalty Points dan Tier (LTY-001, LTY-002, LTY-003, LTY-004)
+
+Modul loyalty berada di balik feature flag `loyalty` (default `true`). Semua route mengembalikan
+`403 FEATURE_DISABLED` kalau flag dimatikan.
+
+Poin disimpan sebagai bilangan bulat di `loyalty_accounts.balance` (saldo yang bisa dipakai) dan
+`loyalty_accounts.lifetime_points` (akumulasi seumur hidup, tidak pernah turun). Tier diturunkan
+dari `lifetime_points`, kolom `tier` hanya cache untuk listing.
+
+### Endpoint customer
+
+- `GET /api/v1/loyalty/program`: konfigurasi program aktif (tier, aturan earn, aturan redeem).
+  Tidak butuh login, supaya storefront bisa menampilkan tabel benefit.
+- `GET /api/v1/loyalty` (butuh login): saldo, lifetime points, tier, benefit tier, dan progres ke
+  tier berikutnya. Akun dibuat otomatis pada pembacaan pertama.
+- `GET /api/v1/loyalty/transactions?limit=50` (butuh login): riwayat poin terbaru, maksimum 200
+  baris per permintaan.
+- `POST /api/v1/loyalty/redeem` (butuh login): body `{ "points": 50, "orderId": "uuid-opsional",
+  "note": "opsional" }`. Mengembalikan `points`, `discountAmount`, `balanceAfter`, dan ringkasan
+  akun.
+
+### Endpoint admin
+
+- `GET /api/v1/admin/loyalty/accounts?tier=gold&limit=50`: daftar akun, urut lifetime points
+  menurun, maksimum 200 baris.
+- `GET /api/v1/admin/loyalty/accounts/{userId}`: ringkasan akun plus 20 transaksi terakhir. 404
+  kalau akun belum ada, tidak membuat akun baru.
+- `POST /api/v1/admin/loyalty/accounts/{userId}/earn`: body
+  `{ "source": "purchase" | "review" | "referral", "referenceId": "opsional", "orderTotal":
+  "opsional", "note": "opsional" }`.
+- `POST /api/v1/admin/loyalty/accounts/{userId}/adjust`: body `{ "points": -100, "note": "wajib,
+  minimal 3 karakter" }`. Dipakai untuk mengoreksi kesalahan atau mengembalikan poin dari
+  penukaran yang gagal.
+- `GET /api/v1/admin/loyalty/program` dan `PUT /api/v1/admin/loyalty/program`: baca dan tulis
+  konfigurasi, tersimpan di settings key `loyalty.program`.
+
+### Default program
+
+| Tier | Mulai lifetime points | Diskon | Gratis ongkir mulai |
+| --- | --- | --- | --- |
+| `bronze` | 0 | 0% | tidak pernah |
+| `silver` | 500 | 2% | Rp200.000 |
+| `gold` | 2000 | 5% | Rp150.000 |
+| `platinum` | 5000 | 8% | selalu |
+
+Aturan earn dan redeem default:
+
+- Belanja: 1 poin per Rp1.000 dari nilai order sebelum ongkir, dibulatkan ke bawah.
+- Review: 10 poin.
+- Referral: 50 poin.
+- Tukar: 1 poin = Rp100, minimum 50 poin sekali tukar.
+
+Konfigurasi bisa diubah lewat `PUT /api/v1/admin/loyalty/program`. Kalau isi settings rusak
+(misal diedit manual di database), pembacaan jatuh ke default dan tidak melempar error ke user.
+Ambang tier harus naik ketat dan tier `bronze` harus mulai dari 0. Urutan tier yang tidak rapi
+akan diurutkan ulang saat dibaca, bukan ditolak.
+
+### Aturan poin
+
+- Satu event earn per dokumen sumber, dijaga unique index pada
+  (`user_id`, `source`, `reference_id`). Mengulang webhook order yang sama menghasilkan
+  `409 DUPLICATE_EARN`, bukan saldo dobel.
+- `referenceId` boleh null untuk penyesuaian manual, karena Postgres menganggap NULL unik.
+- Penukaran poin langsung mengurangi saldo dan tidak bisa dibatalkan dari sisi customer. Kalau
+  order yang memakai diskon itu gagal, jalur pemulihannya adalah `POST .../adjust` oleh admin.
+- Lifetime points hanya bertambah. Penyesuaian negatif mengurangi saldo yang bisa dipakai, bukan
+  tier, jadi tidak ada demotion di implementasi ini.
+- Diskon tier dan gratis ongkir disediakan sebagai helper murni (`applyTierDiscount`,
+  `qualifiesForFreeShipping`) dan belum dipasang ke checkout.
+
+### Kode error
+
+| Kode | HTTP | Arti |
+| --- | --- | --- |
+| `INVALID_TIER` | 400 | Nama tier tidak dikenal, duplikat, atau jumlah tier bukan empat |
+| `INVALID_TIER_THRESHOLD` | 400 | Ambang bukan bilangan bulat >= 0, bronze bukan 0, atau ada ambang kembar |
+| `INVALID_DISCOUNT` | 400 | Diskon tier di luar 0 sampai 100 |
+| `INVALID_EARN_RULE` | 400 | `rupiahPerPoint` bukan > 0, atau poin review/referral negatif |
+| `INVALID_REDEEM_RULE` | 400 | `currencyPerPoint` bukan > 0, atau `minPoints` negatif |
+| `INVALID_POINTS` | 400 | Poin bukan bilangan bulat positif, atau delta penyesuaian nol |
+| `INVALID_AMOUNT` | 400 | Nilai order negatif atau bukan angka |
+| `INVALID_SOURCE` | 400 | Sumber poin bukan purchase, review, atau referral |
+| `MIN_REDEEM_NOT_MET` | 400 | Penukaran di bawah minimum program |
+| `INSUFFICIENT_POINTS` | 409 | Saldo tidak cukup, termasuk penyesuaian yang membuat saldo negatif |
+| `ACCOUNT_NOT_FOUND` | 404 | Akun loyalty tidak ada pada lookup admin |
+| `DUPLICATE_EARN` | 409 | Poin untuk referensi yang sama sudah pernah dicatat |
+
+### Keputusan yang masih terbuka
+
+- Earn belum otomatis. Checkout, review, dan referral belum memanggil fungsi `earnPoints`, jadi
+  poin baru masuk lewat endpoint admin atau pemanggilan service langsung. Penautan ke event order
+  dan review menyusul saat modul referral dan wallet mendarat.
+- Diskon tier dan gratis ongkir belum dipotong di checkout. Helper-nya sudah ada dan sudah diuji,
+  tinggal dipanggil dari alur pembuatan order.
+- Poin belum kedaluwarsa (LTY-005) dan belum ada reward ulang tahun (LTY-006), karena keduanya P2
+  dan tidak masuk daftar Phase 3.

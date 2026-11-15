@@ -65,6 +65,23 @@ test('Database Schema Verification: All Required Tables and Columns Defined', as
     assert.ok((schema as any).walletTransactions, 'walletTransactions table must exist');
   });
 
+  await t.test('loyalty_accounts and loyalty_transactions schemas exist', () => {
+    const accounts = (schema as any).loyaltyAccounts;
+    const transactions = (schema as any).loyaltyTransactions;
+    assert.ok(accounts, 'loyaltyAccounts table must exist');
+    assert.ok(transactions, 'loyaltyTransactions table must exist');
+    assert.ok(accounts.balance, 'loyaltyAccounts.balance must exist');
+    assert.ok(accounts.lifetimePoints, 'loyaltyAccounts.lifetimePoints must exist');
+    assert.ok(accounts.tier, 'loyaltyAccounts.tier must exist');
+    assert.ok(transactions.points, 'loyaltyTransactions.points must exist');
+    assert.ok(transactions.referenceId, 'loyaltyTransactions.referenceId must exist');
+  });
+
+  await t.test('drizzle migration 0010_loyalty.sql exists', () => {
+    const migrationFile = path.resolve(process.cwd(), 'drizzle/0010_loyalty.sql');
+    assert.ok(fs.existsSync(migrationFile), '0010_loyalty.sql must exist');
+  });
+
   await t.test('notifications, notification_templates, notification_preferences exist', () => {
     assert.ok(schema.notifications, 'notifications table must exist');
     assert.ok(schema.notificationTemplates, 'notificationTemplates table must exist');

@@ -45,6 +45,33 @@ export const shippingDefaultSchema = z.object({
   requireDefaultLocation: z.boolean(),
 });
 
+/**
+ * Shape check for the loyalty program stored in settings. Ordering rules (bronze starts at 0,
+ * thresholds strictly increasing) are enforced again by assertLoyaltyProgramConfig on read,
+ * so a hand-edited settings row cannot silently break tier resolution.
+ */
+export const loyaltyProgramSettingSchema = z.object({
+  tiers: z
+    .array(
+      z.object({
+        tier: z.enum(['bronze', 'silver', 'gold', 'platinum']),
+        minLifetimePoints: z.number().int().nonnegative(),
+        discountPercent: z.number().min(0).max(100),
+        freeShippingMinAmount: z.number().nonnegative().nullable(),
+      })
+    )
+    .length(4),
+  earn: z.object({
+    rupiahPerPoint: z.number().int().positive(),
+    reviewPoints: z.number().int().nonnegative(),
+    referralPoints: z.number().int().nonnegative(),
+  }),
+  redeem: z.object({
+    currencyPerPoint: z.number().int().positive(),
+    minPoints: z.number().int().nonnegative(),
+  }),
+});
+
 export const settingValidators: Record<string, z.ZodTypeAny> = {
   'brand.name': z.object({ text: z.string().min(1).max(120) }),
   'brand.currency': z.object({ code: z.string().length(3) }),
@@ -55,6 +82,7 @@ export const settingValidators: Record<string, z.ZodTypeAny> = {
   'order.number_format': z.object({ pattern: z.string().min(1).max(120) }),
   'shipping.default': shippingDefaultSchema,
   'shipping.showAggregatorWithinRadius': z.object({ enabled: z.boolean() }),
+  'loyalty.program': loyaltyProgramSettingSchema,
   feature_flags: featureFlagsSchema,
   'maintenance.mode': z.object({
     enabled: z.boolean(),

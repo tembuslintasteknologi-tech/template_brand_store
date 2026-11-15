@@ -1361,3 +1361,119 @@ Catatan:
   - Jalur 200 untuk saldo, riwayat, preview, bayar, kredit, dan adjustment admin belum terbukti
     karena Postgres lokal menolak login. Yang terbukti: route ter-mount, guard 401 jalan pada
     customer dan admin, feature gate wallet terpasang, dan path asing 404.
+
+---
+2026-11-15 (lanjutan 15)
+Task: Audit status Phase 3 Advanced, baris yang benar-benar partial diubah dari [ ] menjadi [~]
+Jenis perubahan: dokumentasi dan status saja, tanpa perubahan kode produk.
+File yang berubah:
+  M  TASK-CHECKLIST.md   (8 baris Phase 3 diberi bukti; 4 jadi [~], 4 tetap [ ]; rekap dihitung ulang)
+  M  VERIFY-LOG.md       (blok ini)
+
+Command:
+  Select-String -Path "src\**\*.ts" -Pattern <kata kunci> -SimpleMatch
+Output:
+  totp          : 0
+  2fa           : 0
+  twoFactor     : 0
+  chat          : 0
+  liveChat      : 0
+  reconcil      : 0
+  abandon       : 0
+  impression    : 0
+  bannerEvent   : 0
+  clickEvent    : 0
+  k6            : 0
+  loadTest      : 0
+  cursor        : 0
+  etag / ETag   : 0
+  compression   : 0
+  moderat       : 3 hit, semuanya di src/routes/reviews.ts (moderasi manual, bukan otomatis)
+
+Command:
+  Select-String -Path src\app.ts -Pattern "realtime"
+Output:
+  (nol hasil. realtimeRoutes ada di src/routes/realtime.ts tetapi tidak pernah di-mount.
+   broadcastOrderStatus di src/services/realtime/realtimeService.ts juga tidak dipanggil
+   dari mana pun, jadi SSE order status belum berfungsi.)
+
+Command:
+  Select-String -Path "src\routes\*.ts" -Pattern "query\('limit'\)|query\('page'\)|query\('offset'\)|query\('cursor'\)"
+Output:
+  12 endpoint memakai limit: admin.ts (3), branches.ts, loyalty.ts (2), notifications.ts,
+  referral.ts, reviews.ts (3), wallet.ts (2). Tidak ada satu pun yang memakai page, offset,
+  atau cursor.
+
+Command:
+  Select-String -Path "src\**\*.ts" -Pattern "Cache-Control|ETag"
+Output:
+  src\middleware\security.ts:48  Strict-Transport-Security max-age
+  src\routes\products.ts:49      Cache-Control: no-store
+  src\routes\shipping.ts:41      Cache-Control: no-store
+  (tidak ada ETag, tidak ada cache publik bertingkat)
+
+Command:
+  Select-String -Path "..\brand-store-prd\PRD-Brand-Store-Template.md" -Pattern "FIN-"
+Output:
+  (nol hasil. Hanya FIN-001 yang dirujuk checklist dari sumber lain. FIN-002..004 tidak
+   didefinisikan di PRD, jadi cakupannya tidak dikarang di checklist.)
+
+Command:
+  hitung checkbox TASK-CHECKLIST.md di luar code fence
+Output:
+  x=147  p=6  n=35  total=188
+  Sebelum audit: x=147  p=2  n=39  total=188. Rekap lama menulis 171 item dengan 22/26/123,
+  angka itu sudah usang dan diperbarui menjadi 147/6/35 dari 188.
+
+Command:
+  cd brand-store-app && npx tsc --noEmit
+Output:
+  [tsc exit: 0]
+
+Command:
+  cd brand-store-app && npm test
+Output:
+  1..250
+  # tests 659
+  # suites 51
+  # pass 659
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+  # duration_ms 6561.1024
+
+Keputusan status per baris (alasannya ditulis juga di TASK-CHECKLIST.md):
+  [~] Analytics lanjutan + rekonsiliasi (FIN-002..004)
+      Ada finance summary JSON/CSV, dashboard, reports/sales, reports/products, analytics/branches.
+      Belum ada rekonsiliasi gateway, settlement, pajak, jurnal, deteksi selisih.
+  [~] Optimasi API untuk mobile
+      Ada amplop seragam, requestId, header rate limit, 12 endpoint berlimit.
+      Belum ada cursor pagination, ETag, kompresi, fields, endpoint batch.
+  [~] Moderasi gambar/teks otomatis (MOD-003, MOD-004)
+      Ada antrean moderasi manual review dan report.
+      Belum ada NSFW, filter kata kasar, skor keyakinan, penolakan otomatis.
+      MOD-003 nol, MOD-004 baru manual.
+  [~] Banner analytics (CMS-004) dan targeting (CMS-003)
+      Ada CRUD banner, jadwal tayang, filter placement per halaman.
+      Belum ada targeting segmen user, view/click, CTR, laporan, tabel event.
+  [ ] Live chat (RTC-003)
+      Hanya kerangka SSE yang tidak di-mount dan tidak punya pemancar event. Aturan repo:
+      route yang tidak di-mount dihitung belum, jadi tidak diberi [~].
+  [ ] Abandoned cart (CRT-009)
+      Tabel carts dan cart_items ada di schema, tetapi cartService masih memakai Map memori
+      dan tidak menyentuh tabel itu, jadi tidak ada data idle untuk dipindai. Tidak ada job,
+      status, token pemulihan, atau pengingat.
+  [ ] Admin 2FA TOTP (AUT-012)
+      OTP SMS customer ada, tetapi itu faktor berbeda dan tidak terpasang di login admin.
+      Tidak ada secret TOTP, otpauth, QR, recovery code, enrollment, atau langkah kedua.
+  [ ] Load test
+      Tidak ada skrip k6/artillery, skenario, ambang SLA, hasil p95, atau bukti concurrent.
+
+Catatan:
+  - Tidak ada kode produk yang diubah pada blok ini, jadi tsc dan npm test hanya membuktikan
+    baseline tetap hijau (659 test, 51 suite, 0 gagal), bukan menguji fitur baru.
+  - Postgres lokal masih menolak login (password authentication failed for user "postgres"),
+    jadi audit ini murni statis: membaca route, service, schema, dan hasil grep.
+  - Satu baris checklist memakai karakter panah U+2194 pada judul live chat. Karakter itu
+    dipertahankan apa adanya, dan tidak ada em dash yang ditambahkan pada baris baru.

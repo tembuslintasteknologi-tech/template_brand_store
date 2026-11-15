@@ -422,3 +422,93 @@ akan diurutkan ulang saat dibaca, bukan ditolak.
   tinggal dipanggil dari alur pembuatan order.
 - Poin belum kedaluwarsa (LTY-005) dan belum ada reward ulang tahun (LTY-006), karena keduanya P2
   dan tidak masuk daftar Phase 3.
+
+---
+
+## Referral Program (RFR-001, RFR-002, RFR-003, RFR-004, RFR-005)
+
+Modul referral berada di balik feature flag `referral` (default `true`). Semua route mengembalikan
+`403 FEATURE_DISABLED` kalau flag dimatikan.
+
+Kode referral dibuat otomatis pada pembacaan pertama, diturunkan dari user id ditambah nomor
+percobaan, lalu diambil delapan karakter dari alfabet `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (tanpa I,
+L, O, 0, dan 1 supaya tidak salah baca). Kode unik dijaga index di database, jadi tabrakan
+diselesaikan dengan percobaan berikutnya, bukan dengan tebakan acak.
+
+### Endpoint publik
+
+- `GET /api/v1/referrals/program`: konfigurasi program aktif, tidak butuh login, dipakai storefront
+  untuk menampilkan banner ajak teman.
+
+### Endpoint customer
+
+- `GET /api/v1/referrals/me` (butuh login): kode sendiri, link siap bagikan, konfigurasi program,
+  ringkasan hitungan (total, pending, qualified, rewarded, cancelled, poin didapat), dan daftar
+  referral terbaru. Kode dibuat otomatis kalau belum ada.
+- `GET /api/v1/referrals` (butuh login): daftar referral saja, tanpa pembungkus.
+- `GET /api/v1/referrals/inbound` (butuh login): baris referral di mana pemanggil adalah pihak yang
+  diundang. `null` kalau belum pernah memakai kode.
+- `POST /api/v1/referrals/claim` (butuh login): body `{ "code": "ABCD2345" }` atau link penuh
+  `{ "code": "https://toko.test/r/ABCD2345" }`. Kode dinormalkan (huruf besar, spasi dan tanda
+  hubung dibuang), lalu didaftarkan sebagai referral `pending`.
+
+### Endpoint admin
+
+- `GET /api/v1/admin/referrals?status=pending&limit=50`: daftar referral, terbaru dulu, maksimum
+  200 baris, termasuk email kedua pihak.
+- `GET /api/v1/admin/referrals/{id}`: detail satu referral.
+- `POST /api/v1/admin/referrals/{id}/qualify`: body `{ "orderId": "uuid", "note": "opsional" }`.
+  Order wajib milik referee dan sudah lunas. Endpoint ini memindahkan status ke `qualified`, lalu
+  memberi poin ke kedua pihak, lalu menandai `rewarded`.
+- `POST /api/v1/admin/referrals/{id}/cancel`: body `{ "note": "opsional" }`. Hanya berlaku untuk
+  status `pending` atau `qualified`. Referral `rewarded` bersifat final dan poinnya tidak ditarik
+  kembali lewat endpoint ini.
+- `GET /api/v1/admin/referrals/program` dan `PUT /api/v1/admin/referrals/program`: baca dan tulis
+  konfigurasi, tersimpan di settings key `referral.program`. Body
+  `{ "referrerPoints": 50, "refereePoints": 25, "maxReferralsPerUser": null }`.
+- Base URL link diatur lewat `PUT /api/v1/admin/settings/referral.baseUrl` dengan body
+  `{ "url": "https://toko.test" }`. Kalau belum diatur, dipakai `STOREFRONT_BASE_URL` atau
+  `https://tembus.test`.
+
+### Aturan dan alur hadiah
+
+- Hadiah dicatat lewat ledger loyalty, bukan tabel poin terpisah. Satu referral menulis dua baris
+  `loyalty_transactions` dengan `source = referral` dan `reference_id` `<referralId>:referrer`
+  serta `<referralId>:referee`. Unique index earn yang sudah ada membuat hadiah tidak bisa dobel
+  walau endpoint verifikasi dipanggil berulang.
+- Jumlah poin disalin ke baris referral saat klaim. Mengubah program setelahnya tidak mengubah
+  janji hadiah untuk referral yang sudah masuk.
+- Referee harus akun baru: bukan diri sendiri, belum pernah memakai kode apa pun, dan belum punya
+  order lunas. Pemeriksaan order memakai daftar status pendapatan yang sama dengan modul finance.
+- Status referral: `pending`, `qualified`, `rewarded`, `cancelled`. `rewarded` dan `cancelled`
+  bersifat final.
+- Kalau penulisan ledger gagal di tengah, baris referral tetap `qualified` dan panggilan
+  verifikasi berikutnya melanjutkan dari langkah hadiah, bukan mengulang dari awal.
+- `maxReferralsPerUser` dihitung dari referral berstatus selain `cancelled`. `null` berarti tanpa
+  batas.
+
+### Kode error
+
+| Kode | HTTP | Arti |
+| --- | --- | --- |
+| `INVALID_CODE` | 400 | Kode atau seed bukan string, atau memuat karakter ambigu |
+| `INVALID_CODE_LENGTH` | 400 | Panjang kode di luar 4 sampai 16 karakter |
+| `INVALID_BASE_URL` | 400 | Base URL kosong, rusak, atau bukan http atau https |
+| `INVALID_REWARD` | 400 | Poin referrer atau referee negatif, pecahan, atau tidak ada |
+| `INVALID_LIMIT` | 400 | Batas referral negatif atau pecahan |
+| `CODE_TAKEN` | 500 | Pembuatan kode gagal setelah delapan percobaan |
+| `CODE_NOT_FOUND` | 404 | Kode yang diklaim tidak ada |
+| `SELF_REFERRAL` | 409 | Memakai kode sendiri |
+| `ALREADY_REFERRED` | 409 | Akun sudah pernah memakai kode referral |
+| `REFEREE_NOT_NEW` | 409 | Referee sudah punya order lunas, atau order verifikasi tidak valid |
+| `REFERRAL_NOT_FOUND` | 404 | Referral atau order verifikasi tidak ditemukan |
+| `INVALID_TRANSITION` | 409 | Perpindahan status tidak sah, termasuk verifikasi ganda |
+| `REFERRAL_LIMIT_REACHED` | 409 | Batas referral per akun sudah tercapai |
+
+### Keputusan yang masih terbuka
+
+- Hadiah referee baru masuk setelah admin memverifikasi order pertama. Belum ada pemicu otomatis
+  dari webhook pembayaran, karena modul ini tidak mau menebak kapan order dianggap sah.
+- Leaderboard referral (RFR-006) belum dibuat karena P2 dan di luar daftar Phase 3.
+- Kode yang sudah dibuat tidak bisa diganti sendiri oleh customer. Belum ada endpoint regenerasi,
+  karena setiap regenerasi akan mematikan link lama yang sudah tersebar.

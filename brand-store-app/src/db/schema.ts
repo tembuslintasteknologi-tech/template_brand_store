@@ -646,6 +646,47 @@ export const loyaltyTransactions = pgTable('loyalty_transactions', {
 }));
 
 // ---------------------------------------------------------------------------
+// REFERRAL (RFR-001..RFR-005)
+// ---------------------------------------------------------------------------
+export const referralCodes = pgTable('referral_codes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull().unique(),
+  code: varchar('code', { length: 16 }).notNull().unique(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  userIdx: uniqueIndex('referral_codes_user_idx').on(table.userId),
+  codeIdx: uniqueIndex('referral_codes_code_idx').on(table.code),
+}));
+
+export const referrals = pgTable('referrals', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  referrerId: uuid('referrer_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  // One referral row per referee, enforced by a unique index. A customer cannot be claimed
+  // twice, not even after the first referral is cancelled.
+  refereeId: uuid('referee_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  code: varchar('code', { length: 16 }).notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('pending'), // pending, qualified, rewarded, cancelled
+  // Snapshot of the reward rules at claim time, so a program change later does not silently
+  // rewrite what an existing referral promised.
+  referrerPoints: integer('referrer_points').notNull().default(0),
+  refereePoints: integer('referee_points').notNull().default(0),
+  /** Order that qualified the referral. Set when an admin verifies the first paid order. */
+  qualifyingOrderId: uuid('qualifying_order_id').references(() => orders.id),
+  note: text('note'),
+  qualifiedAt: timestamp('qualified_at'),
+  rewardedAt: timestamp('rewarded_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  referrerIdx: index('referrals_referrer_idx').on(table.referrerId),
+  refereeIdx: uniqueIndex('referrals_referee_idx').on(table.refereeId),
+  statusIdx: index('referrals_status_idx').on(table.status),
+  codeIdx: index('referrals_code_idx').on(table.code),
+  createdIdx: index('referrals_created_idx').on(table.createdAt),
+}));
+
+// ---------------------------------------------------------------------------
 // WALLETS
 // ---------------------------------------------------------------------------
 export const wallets = pgTable('wallets', {

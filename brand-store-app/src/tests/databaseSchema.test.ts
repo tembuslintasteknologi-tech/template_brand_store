@@ -82,6 +82,25 @@ test('Database Schema Verification: All Required Tables and Columns Defined', as
     assert.ok(fs.existsSync(migrationFile), '0010_loyalty.sql must exist');
   });
 
+  await t.test('referral_codes and referrals schemas exist', () => {
+    const codes = (schema as any).referralCodes;
+    const rows = (schema as any).referrals;
+    assert.ok(codes, 'referralCodes table must exist');
+    assert.ok(rows, 'referrals table must exist');
+    assert.ok(codes.code, 'referralCodes.code must exist');
+    assert.ok(codes.userId, 'referralCodes.userId must exist');
+    assert.ok(rows.referrerId, 'referrals.referrerId must exist');
+    assert.ok(rows.refereeId, 'referrals.refereeId must exist');
+    assert.ok(rows.status, 'referrals.status must exist');
+    assert.ok(rows.referrerPoints, 'referrals.referrerPoints must exist');
+    assert.ok(rows.refereePoints, 'referrals.refereePoints must exist');
+  });
+
+  await t.test('drizzle migration 0011_referral.sql exists', () => {
+    const migrationFile = path.resolve(process.cwd(), 'drizzle/0011_referral.sql');
+    assert.ok(fs.existsSync(migrationFile), '0011_referral.sql must exist');
+  });
+
   await t.test('notifications, notification_templates, notification_preferences exist', () => {
     assert.ok(schema.notifications, 'notifications table must exist');
     assert.ok(schema.notificationTemplates, 'notificationTemplates table must exist');

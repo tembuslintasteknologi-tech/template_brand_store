@@ -167,12 +167,25 @@ export interface EarnPointsInput {
   referenceId?: string | null;
   orderTotal?: number | string | null;
   note?: string | null;
+  /**
+   * Explicit point amount, used by modules that own their own reward config (referral).
+   * When omitted, the amount is derived from the loyalty earn rules for the given source.
+   */
+  points?: number | null;
 }
 
 export interface EarnPointsResult {
   account: LoyaltyAccountView;
   transaction: LoyaltyTransactionView;
   earnedPoints: number;
+}
+
+/** Guards an explicit point amount handed in by another module. Whole points only. */
+function resolveExplicitPoints(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    throw new LoyaltyError('INVALID_POINTS', 'Poin eksplisit harus bilangan bulat positif');
+  }
+  return value;
 }
 
 /**
@@ -185,7 +198,10 @@ export interface EarnPointsResult {
 export async function earnPoints(input: EarnPointsInput): Promise<EarnPointsResult> {
   const source = assertEarnSource(input.source);
   const config = await getLoyaltyProgram();
-  const points = computeEarnedPoints({ source, orderTotal: input.orderTotal }, config);
+  const points =
+    input.points === undefined || input.points === null
+      ? computeEarnedPoints({ source, orderTotal: input.orderTotal }, config)
+      : resolveExplicitPoints(input.points);
 
   if (points <= 0) {
     throw new LoyaltyError('INVALID_POINTS', 'Tidak ada poin yang bisa diperoleh dari transaksi ini');

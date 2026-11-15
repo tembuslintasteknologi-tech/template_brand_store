@@ -1169,3 +1169,103 @@ Catatan:
     Kode memang sengaja mengurutkan ulang tier sebelum memvalidasi, jadi ambang turun itu valid
     dan dinormalkan. Yang salah test-nya, bukan implementasinya. Test diganti menjadi dua:
     ambang kembar ditolak, ambang tidak berurutan diterima dan diurutkan naik.
+
+---
+2026-11-15 (lanjutan 13)
+Task: RFR Phase 3 item 3, modul Referral (RFR-001, RFR-002, RFR-003, RFR-004, RFR-005)
+Jenis perubahan: fitur baru (service, repository, route, schema, migrasi, test, docs).
+File yang berubah:
+  A  src/services/referral/referralService.ts
+  A  src/services/referral/referralRepository.ts
+  A  src/routes/referral.ts
+  A  src/tests/referral.test.ts
+  A  drizzle/0011_referral.sql
+  M  src/db/schema.ts                      (tabel referralCodes + referrals)
+  M  src/services/config/settings.ts       (referralProgramSettingSchema, referral.baseUrl, flag referral)
+  M  src/services/loyalty/loyaltyRepository.ts (override points eksplisit pada earnPoints)
+  M  src/app.ts                            (mount referralRoutes + referralAdminRoutes)
+  M  src/tests/databaseSchema.test.ts      (assert tabel referral + migrasi 0011)
+  M  API-DOCS.md                           (section Referral Program)
+  M  TASK-CHECKLIST.md                     (baris referral jadi [x])
+  M  VERIFY-LOG.md                         (blok ini)
+Command:
+  npx tsc --noEmit
+Output:
+  TSC_EXIT=0
+Command:
+  node --import tsx/esm --test src/tests/referral.test.ts
+Output:
+  1..8
+  # tests 47
+  # suites 0
+  # pass 47
+  # fail 0
+  # duration_ms 249.8431
+Command:
+  node --import tsx/esm --test src/tests/databaseSchema.test.ts
+Output:
+  1..1
+  # tests 17
+  # suites 0
+  # pass 17
+  # fail 0
+  # duration_ms 704.2911
+Command:
+  npm test 2>&1 | Select-Object -Last 12
+Output:
+  1..243
+  # tests 611
+  # suites 51
+  # pass 611
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+  # duration_ms 6825.521
+Command:
+  node --import tsx/esm scripts/tmp-smoke-referral.ts   (script sementara, sudah dihapus)
+Output:
+  --- route table (referral) ---
+  ALL  /api/v1/referrals/*
+  GET  /api/v1/admin/referrals
+  GET  /api/v1/admin/referrals/:id
+  GET  /api/v1/admin/referrals/program
+  GET  /api/v1/referrals
+  GET  /api/v1/referrals/inbound
+  GET  /api/v1/referrals/me
+  GET  /api/v1/referrals/program
+  POST /api/v1/admin/referrals/:id/cancel
+  POST /api/v1/admin/referrals/:id/qualify
+  POST /api/v1/referrals/claim
+  PUT  /api/v1/admin/referrals/program
+  --- request ---
+  [404] GET /api/v1/referrals/does-not-exist
+        NOT_FOUND
+  [200] GET /api/v1/referrals/program
+        {"success":true,"data":{"referrerPoints":50,"refereePoints":25,"maxReferralsPerUser":null},...}
+  [401] GET /api/v1/referrals/me
+        UNAUTHORIZED
+  [401] GET /api/v1/referrals
+        UNAUTHORIZED
+  [401] POST /api/v1/referrals/claim
+        UNAUTHORIZED
+  [401] GET /api/v1/admin/referrals
+        UNAUTHORIZED
+  [401] GET /api/v1/admin/referrals/program
+        UNAUTHORIZED
+Catatan:
+  - Baris route yang tampil dobel (misal GET /api/v1/referrals dan GET /api/v1/referrals/me) adalah
+    artefak Hono, bukan pendaftaran ganda. Middleware inline dan handler akhir dicatat sebagai dua
+    entri, pola yang sama sudah dibuktikan pada modul flash sale dan loyalty. Request tetap dijawab
+    sekali.
+  - GET /api/v1/referrals/program membalas 200 tanpa Postgres hidup karena getSettingValue
+    menangkap error database dan mengembalikan fallback. Jadi endpoint ini memang bisa diuji penuh
+    tanpa DB, dan yang terlihat adalah DEFAULT_REFERRAL_PROGRAM.
+  - Jalur 200 untuk kode, dashboard, klaim, verifikasi, dan listing admin belum terbukti karena
+    Postgres lokal menolak login (password authentication failed for user "postgres"). Yang
+    terbukti: route ter-mount, guard 401 jalan pada customer dan admin, feature gate referral
+    terpasang, dan path asing 404.
+  - Hadiah referral memakai earnPoints dengan override points eksplisit dan reference_id
+    "<referralId>:referrer" serta "<referralId>:referee", jadi unique index earn yang sudah ada
+    membuat verifikasi ganda tidak bisa membayar dua kali. Ini belum diuji lewat database sungguhan,
+    hanya dinilai dari jalur kode dan unit test aturan murni.

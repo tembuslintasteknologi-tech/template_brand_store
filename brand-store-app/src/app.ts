@@ -29,6 +29,7 @@ import { financeAdminRoutes } from './routes/finance.js';
 import { adminBranchRoutes, branchRoutes } from './routes/branches.js';
 import { flashSaleAdminRoutes, flashSaleRoutes } from './routes/flashSales.js';
 import { loyaltyAdminRoutes, loyaltyRoutes } from './routes/loyalty.js';
+import { referralAdminRoutes, referralRoutes } from './routes/referral.js';
 import { pingDatabase } from './db/index.js';
 import { redisPing } from './config/redis.js';
 
@@ -139,6 +140,8 @@ export function createApp() {
   api.route('/admin', flashSaleAdminRoutes);
   api.route('/loyalty', loyaltyRoutes);
   api.route('/admin', loyaltyAdminRoutes);
+  api.route('/referrals', referralRoutes);
+  api.route('/admin', referralAdminRoutes);
 
   app.route('/api/v1', api);
   app.route('/webhooks/logistics', logisticsWebhookRoutes);

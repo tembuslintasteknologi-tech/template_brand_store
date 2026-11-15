@@ -72,6 +72,16 @@ export const loyaltyProgramSettingSchema = z.object({
   }),
 });
 
+/**
+ * Shape check for the referral program stored in settings. Reward amounts are re-validated by
+ * assertReferralProgramConfig on read, so a hand-edited row cannot produce negative rewards.
+ */
+export const referralProgramSettingSchema = z.object({
+  referrerPoints: z.number().int().nonnegative(),
+  refereePoints: z.number().int().nonnegative(),
+  maxReferralsPerUser: z.number().int().nonnegative().nullable(),
+});
+
 export const settingValidators: Record<string, z.ZodTypeAny> = {
   'brand.name': z.object({ text: z.string().min(1).max(120) }),
   'brand.currency': z.object({ code: z.string().length(3) }),
@@ -83,6 +93,8 @@ export const settingValidators: Record<string, z.ZodTypeAny> = {
   'shipping.default': shippingDefaultSchema,
   'shipping.showAggregatorWithinRadius': z.object({ enabled: z.boolean() }),
   'loyalty.program': loyaltyProgramSettingSchema,
+  'referral.program': referralProgramSettingSchema,
+  'referral.baseUrl': z.object({ url: z.string().url() }),
   feature_flags: featureFlagsSchema,
   'maintenance.mode': z.object({
     enabled: z.boolean(),
@@ -197,6 +209,7 @@ export const DEFAULT_FEATURE_FLAGS: Record<string, boolean> = {
   wallet: true,
   loyalty: true,
   flash_sale: true,
+  referral: true,
 };
 
 export async function getFeatureFlags(): Promise<Record<string, boolean>> {

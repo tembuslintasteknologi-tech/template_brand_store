@@ -234,7 +234,7 @@ Kabar baiknya, sisi logistik sudah siap: `logisticProvider.ts` menerima `origin.
 
 ## Phase 3: Advanced
 
-- [ ] Flash sale: CRUD, alokasi stok, limit per user, countdown (FLS-001, FLS-002, FLS-005, FLS-006)
+- [x] Flash sale: CRUD, alokasi stok, limit per user, countdown (FLS-001, FLS-002, FLS-004, FLS-005, FLS-006)
 - [ ] Loyalty points + tier (LTY-001..004)
 - [ ] Referral program (RFR-001..005)
 - [ ] Store credit wallet: saldo, bayar, cashback, riwayat (WLT-001..003)

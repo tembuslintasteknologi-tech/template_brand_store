@@ -48,6 +48,8 @@ test('Database Schema Verification: All Required Tables and Columns Defined', as
     assert.ok((schema as any).flashSales, 'flashSales table must exist in schema');
     assert.ok((promosSchema as any).flashSaleItems, 'flashSaleItems table must exist in promosSchema');
     assert.ok((schema as any).flashSaleItems, 'flashSaleItems table must exist in schema');
+    assert.ok((schema as any).flashSalePurchases, 'flashSalePurchases table must exist in schema');
+    assert.ok((schema as any).flashSaleItems.perUserLimit, 'flashSaleItems.perUserLimit must exist');
   });
 
   await t.test('reviews with admin_reply columns exists', () => {

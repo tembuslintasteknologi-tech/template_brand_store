@@ -1,25 +1,25 @@
-# Graph Report - .  (2026-11-13)
+# Graph Report - .  (2026-11-15)
 
 ## Corpus Check
-- 178 files · ~103,687 words
+- 178 files · ~104,667 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1173 nodes · 2865 edges · 59 communities detected
+- 1175 nodes · 2868 edges · 59 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
-- Edge kinds: contains: 863 · imports: 791 · imports_from: 377 · calls: 306 · MODIFIES: 238 · ON_BRANCH: 102 · method: 81 · references: 52 · PARENT_OF: 40 · implements: 5 · inherits: 5 · re_exports: 4 · cites: 1
+- Edge kinds: contains: 864 · imports: 791 · imports_from: 377 · calls: 306 · MODIFIES: 238 · ON_BRANCH: 103 · method: 81 · references: 52 · PARENT_OF: 41 · implements: 5 · inherits: 5 · re_exports: 4 · cites: 1
 
 
 ## Input Scope
 - Requested: auto
 - Resolved: committed (source: default-auto)
-- Included files: 178 · Candidates: 473
-- Excluded: 0 untracked · 20618 ignored · 2 sensitive · 0 missing committed
+- Included files: 178 · Candidates: 475
+- Excluded: 5 untracked · 20618 ignored · 2 sensitive · 0 missing committed
 - Recommendation: Use --scope all or graphify.yaml inputs.corpus for a knowledge-base folder.
 
 ## Graph Freshness
-- Built from Git commit: `781d54f`
+- Built from Git commit: `e2c831e`
 - Compare this hash to `git rev-parse HEAD` before trusting freshness-sensitive graph output.
 ## God Nodes (most connected - your core abstractions)
 1. `db` - 43 edges
@@ -35,11 +35,11 @@
 
 ## Surprising Connections (you probably didn't know these)
 - `resolveAnalyticsWindow()` --calls--> `BranchAnalyticsError`  [EXTRACTED]
-  src/services/admin/branchAnalytics.ts → src/services/admin/branchAnalytics.ts  _Bridges community 14 → community 44_
+  src/services/admin/branchAnalytics.ts → src/services/admin/branchAnalytics.ts  _Bridges community 13 → community 44_
 - `assertBranchCanFulfill()` --calls--> `OrderSourceError`  [EXTRACTED]
   src/services/branch/orderSourceService.ts → src/services/branch/orderSourceService.ts  _Bridges community 11 → community 48_
 - `d4f150d chore: restore recovered application files` --ON_BRANCH--> `restore-recovered-files`  [EXTRACTED]
-  git → git  _Bridges community 4 → community 8_
+  git → git  _Bridges community 4 → community 7_
 - `getShowAggregatorWithinRadius()` --calls--> `getSettingValue()`  [EXTRACTED]
   src/services/config/settings.ts → src/services/config/settings.ts  _Bridges community 36 → community 0_
 - `isFeatureEnabled()` --calls--> `getFeatureFlags()`  [EXTRACTED]
@@ -76,12 +76,12 @@ Cohesion: 0.11
 Nodes (13): ManualBankProvider, PaymentProvider, ENABLED_PAYMENTS, MidtransOptions, MidtransProvider, PaymentGatewayError, PaymentProvider, paymentManager (+5 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.10
-Nodes (30): userAddresses, Coordinates, DELIVERY_MODES, DeliveryMode, DeliveryModeInput, DeliveryModeReason, DeliveryModeResult, haversineDistanceKm() (+22 more)
+Cohesion: 0.16
+Nodes (33): backup/pre-secret-clean-main, backup/pre-secret-clean-recovery, main, rescue-recovered-15020f0, restore-recovered-files, sanitized-main, 0bc44bb feat(BR-013): dashboard cabang, 0de5313 feat(branch): fondasi multi cabang BR-001..BR-004 (schema, scoping, stok per cabang) (+25 more)
 
 ### Community 8 - "Community 8"
-Cohesion: 0.17
-Nodes (32): backup/pre-secret-clean-main, backup/pre-secret-clean-recovery, main, rescue-recovered-15020f0, restore-recovered-files, sanitized-main, 0bc44bb feat(BR-013): dashboard cabang, 0de5313 feat(branch): fondasi multi cabang BR-001..BR-004 (schema, scoping, stok per cabang) (+24 more)
+Cohesion: 0.10
+Nodes (30): userAddresses, Coordinates, DELIVERY_MODES, DeliveryMode, DeliveryModeInput, DeliveryModeReason, DeliveryModeResult, haversineDistanceKm() (+22 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.12
@@ -100,12 +100,12 @@ Cohesion: 0.13
 Nodes (21): exportProducts(), buildPageSeo(), buildProductSeo(), clampText(), DEFAULT_SITE, firstImage(), getPageSeo(), getProductSeo() (+13 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.09
-Nodes (15): closeRedis(), client, closeDatabase(), pingDatabase(), app, server, app, server (+7 more)
+Cohesion: 0.13
+Nodes (24): BranchAnalyticsEntry, BranchAnalyticsErrorCode, BranchAnalyticsReport, BranchAnalyticsRollup, BranchRef, buildBranchAnalytics(), BuildBranchAnalyticsInput, isRevenue() (+16 more)
 
 ### Community 14 - "Community 14"
-Cohesion: 0.14
-Nodes (23): BranchAnalyticsEntry, BranchAnalyticsErrorCode, BranchAnalyticsReport, BranchAnalyticsRollup, BranchRef, buildBranchAnalytics(), BuildBranchAnalyticsInput, isRevenue() (+15 more)
+Cohesion: 0.09
+Nodes (15): closeRedis(), client, closeDatabase(), pingDatabase(), app, server, app, server (+7 more)
 
 ### Community 15 - "Community 15"
 Cohesion: 0.14
@@ -137,7 +137,7 @@ Nodes (17): adminRoutes, analyticsRoutes, authRoutes, logisticsRoutes, logistics
 
 ### Community 22 - "Community 22"
 Cohesion: 0.13
-Nodes (17): adminLogs, branchInventory, cartItems, carts, flashSaleItems, flashSales, orderDisputes, orderLogs (+9 more)
+Nodes (17): adminLogs, cartItems, carts, flashSaleItems, flashSalePurchases, flashSales, orderDisputes, orderLogs (+9 more)
 
 ### Community 23 - "Community 23"
 Cohesion: 0.14
@@ -284,7 +284,7 @@ Cohesion: 0.50
 Nodes (2): app, server
 
 ## Knowledge Gaps
-- **232 isolated node(s):** `categories`, `promos`, `settings`, `store_locations`, `users` (+227 more)
+- **233 isolated node(s):** `categories`, `promos`, `settings`, `store_locations`, `users` (+228 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **Thin community `Community 39`** (1 nodes): `LogisticAggregator`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -300,14 +300,14 @@ Nodes (2): app, server
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `db` connect `Community 46` to `Community 42`, `Community 24`, `Community 14`, `Community 50`, `Community 29`, `Community 2`, `Community 3`, `Community 11`, `Community 17`, `Community 12`, `Community 0`, `Community 10`, `Community 13`, `Community 9`, `Community 18`, `Community 23`, `Community 1`, `Community 43`, `Community 4`, `Community 5`, `Community 36`, `Community 31`, `Community 6`, `Community 33`, `Community 7`, `Community 15`, `Community 19`?**
+- **Why does `db` connect `Community 46` to `Community 42`, `Community 24`, `Community 13`, `Community 50`, `Community 29`, `Community 2`, `Community 3`, `Community 11`, `Community 17`, `Community 12`, `Community 0`, `Community 10`, `Community 14`, `Community 9`, `Community 18`, `Community 23`, `Community 1`, `Community 43`, `Community 4`, `Community 5`, `Community 36`, `Community 31`, `Community 6`, `Community 33`, `Community 8`, `Community 15`, `Community 19`?**
   _High betweenness centrality (0.055) - this node is a cross-community bridge._
 - **Why does `TembusOnDemandProvider` connect `Community 27` to `Community 9`, `Community 20`, `Community 35`?**
   _High betweenness centrality (0.023) - this node is a cross-community bridge._
 - **Why does `TembusAggregatorProvider` connect `Community 30` to `Community 9`, `Community 20`, `Community 35`?**
   _High betweenness centrality (0.022) - this node is a cross-community bridge._
 - **What connects `categories`, `promos`, `settings` to the rest of the system?**
-  _232 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _233 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
   _Cohesion score 0.06252587991718427 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**

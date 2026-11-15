@@ -1001,4 +1001,79 @@ Catatan:
   - Minimum empat file test baru terpenuhi berkali lipat. Empat yang diminta checklist
     (branchStock, deliveryMode, stockTransfer, branchScope) semuanya ada dan hijau.
   - Script smoke sementara dihapus setelah dipakai, jadi tidak ada file sekali pakai yang
-    ikut ter-commit.
+    ikut ter-commit.---
+2026-11-15 (lanjutan 11)
+Task: FLS Phase 3 item 1, modul Flash Sale (FLS-001, FLS-002, FLS-004, FLS-005, FLS-006)
+Jenis perubahan: fitur baru (service, repository, route, schema, migrasi, test, docs).
+File yang berubah:
+  A  src/services/promo/flashSaleService.ts
+  A  src/services/promo/flashSaleRepository.ts
+  A  src/routes/flashSales.ts
+  A  src/tests/flashSale.test.ts
+  A  drizzle/0009_flash_sale_limits.sql
+  M  src/db/schema.ts                      (flash_sale_items.per_user_limit, tabel flash_sale_purchases)
+  M  src/app.ts                            (mount flashSaleRoutes + flashSaleAdminRoutes)
+  M  src/tests/databaseSchema.test.ts      (assert flashSalePurchases + perUserLimit)
+  M  API-DOCS.md                           (section Flash Sale)
+  M  TASK-CHECKLIST.md                     (baris flash sale jadi [x])
+  M  VERIFY-LOG.md                         (blok ini)
+Command:
+  npx tsc --noEmit
+Output:
+  TSC_EXIT=0
+Command:
+  npm test 2>&1 | Select-Object -Last 25
+Output:
+  1..227
+  # tests 499
+  # suites 51
+  # pass 499
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+  # duration_ms 6968.1663
+Command:
+  node --import tsx/esm --test src/tests/flashSale.test.ts
+Output:
+  flashSale.test.ts  # 54 tests, 0 fail
+Command:
+  node --import tsx/esm --test src/tests/databaseSchema.test.ts
+Output:
+  databaseSchema.test.ts  # 12 tests, 0 fail
+Command:
+  node --import tsx/esm scripts/tmp-smoke-flash.ts   (script sementara, sudah dihapus)
+Output:
+  --- route table (flash-sales) ---
+  ALL    /api/v1/flash-sales/*
+  DELETE /api/v1/admin/flash-sales/:id
+  DELETE /api/v1/admin/flash-sales/:id/items/:itemId
+  GET    /api/v1/admin/flash-sales
+  GET    /api/v1/admin/flash-sales/:id
+  GET    /api/v1/flash-sales
+  GET    /api/v1/flash-sales/:id
+  PATCH  /api/v1/admin/flash-sales/:id
+  PATCH  /api/v1/admin/flash-sales/:id/items/:itemId
+  POST   /api/v1/admin/flash-sales
+  POST   /api/v1/admin/flash-sales/:id/items
+  POST   /api/v1/flash-sales/:id/items/:itemId/purchase
+  POST   /api/v1/flash-sales/:id/items/:itemId/purchase
+  --- unknown path ---
+  404 {"success":false,"error":{"code":"NOT_FOUND","message":"No route matches GET /api/v1/does-not-exist-fls","requestId":"..."}}
+  --- public list without DB ---
+  500 {"success":false,"error":{"code":"INTERNAL_ERROR","message":"Internal Server Error","requestId":"..."}}
+  [route-error] message: 'password authentication failed for user "postgres"'
+  --- admin list without token, no DB ---
+  401 {"success":false,"error":{"code":"UNAUTHORIZED","message":"Unauthorized: Missing or malformed token"}}
+Catatan:
+  - Baris POST purchase muncul dua kali di route table bukan duplikasi pendaftaran. Hono
+    mencatat satu entri untuk middleware inline dan satu untuk handler akhir. Dibuktikan
+    dengan app Hono minimal: route dengan (middleware, handler) menghasilkan dua baris
+    identik, route dengan satu handler menghasilkan satu baris. Request tanpa token tetap
+    dijawab satu kali 401, jadi handler berjalan sekali.
+  - Jalur 200 untuk list flash sale belum terbukti karena Postgres lokal menolak login
+    (`password authentication failed for user "postgres"`). Yang terbukti di sini: route
+    terdaftar, guard 401 jalan, feature gate terpasang, dan error database dipetakan ke 500
+    lewat serverError tanpa membocorkan detail driver.
+  - Aturan domain (status, countdown, harga, stok, limit per user) diuji murni di
+    flashSale.test.ts tanpa database, 54 test hijau.

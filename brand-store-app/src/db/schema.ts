@@ -548,10 +548,30 @@ export const flashSaleItems = pgTable('flash_sale_items', {
   discountValue: decimal('discount_value', { precision: 12, scale: 2 }).notNull(),
   stock: integer('stock').notNull(),
   sold: integer('sold').notNull().default(0),
+  // FLS-006: null means no per-user cap on this line.
+  perUserLimit: integer('per_user_limit'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => ({
   flashSaleIdx: index('flash_sale_items_sale_idx').on(table.flashSaleId),
   productIdx: index('flash_sale_items_product_idx').on(table.productId),
+}));
+
+// ---------------------------------------------------------------------------
+// FLASH SALE PURCHASES (FLS-006 per-user ledger)
+// ---------------------------------------------------------------------------
+export const flashSalePurchases = pgTable('flash_sale_purchases', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  flashSaleItemId: uuid('flash_sale_item_id')
+    .references(() => flashSaleItems.id, { onDelete: 'cascade' })
+    .notNull(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  orderId: uuid('order_id').references(() => orders.id, { onDelete: 'set null' }),
+  quantity: integer('quantity').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  itemUserIdx: index('flash_sale_purchases_item_user_idx').on(table.flashSaleItemId, table.userId),
+  userIdx: index('flash_sale_purchases_user_idx').on(table.userId),
+  orderIdx: index('flash_sale_purchases_order_idx').on(table.orderId),
 }));
 
 // ---------------------------------------------------------------------------

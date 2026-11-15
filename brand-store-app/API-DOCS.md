@@ -231,3 +231,95 @@ bertambah saat `receive`, dan hanya stok tersedia (`stock - reserved`) yang bole
   masih harus dibuat langsung di database (row `users` dengan `role = 'branch_admin'` dan
   `branch_id` terisi) sampai endpoint provisioning cabang dibuat.
 
+
+---
+
+## Flash Sale (FLS-001, FLS-002, FLS-004, FLS-005, FLS-006)
+
+Modul flash sale berada di balik feature flag `flash_sale` (default `true`). Semua route
+mengembalikan `403 FEATURE_DISABLED` kalau flag dimatikan.
+
+### Endpoint publik
+
+- `GET /api/v1/flash-sales`: daftar sale yang sedang berjalan dan yang akan datang. Sale yang
+  sudah selesai, dinonaktifkan, atau punya window rusak tidak ikut tampil.
+- `GET /api/v1/flash-sales/{id}`: detail satu sale, termasuk harga akhir per item, sisa stok, dan
+  data countdown.
+- `POST /api/v1/flash-sales/{id}/items/{itemId}/purchase` (butuh login): body
+  `{ "quantity": 1, "orderId": "uuid-opsional" }`. Endpoint ini memotong alokasi stok flash sale
+  dan menulis ledger pembelian per user.
+
+### Endpoint admin
+
+- `GET /api/v1/admin/flash-sales`
+- `POST /api/v1/admin/flash-sales` body
+  `{ "title", "startAt", "endAt", "isActive", "items": [{ "productId", "variantId", "discountType", "discountValue", "stock", "perUserLimit" }] }`
+- `GET /api/v1/admin/flash-sales/{id}`
+- `PATCH /api/v1/admin/flash-sales/{id}` body `{ "title", "startAt", "endAt", "isActive" }`
+- `DELETE /api/v1/admin/flash-sales/{id}`
+- `POST /api/v1/admin/flash-sales/{id}/items`
+- `PATCH /api/v1/admin/flash-sales/{id}/items/{itemId}` body
+  `{ "discountType", "discountValue", "stock", "perUserLimit" }`
+- `DELETE /api/v1/admin/flash-sales/{id}/items/{itemId}`
+
+### Kontrak status dan countdown
+
+Status diturunkan dari jam server, bukan disimpan sebagai kolom:
+
+| Status | Arti |
+| --- | --- |
+| `upcoming` | `now < startAt` dan sale aktif |
+| `active` | `startAt <= now <= endAt` dan sale aktif |
+| `ended` | `now > endAt` |
+| `inactive` | `isActive = false`, menang atas window apa pun |
+
+Batas window inklusif di kedua ujung. Sale yang berakhir tepat di `endAt` masih bisa dibeli pada
+milidetik itu, dan baru menjadi `ended` satu milidetik setelahnya.
+
+Respons detail menyertakan `serverTime`, `startsInMs`, `endsInMs`, dan `remainingMs`. Timer di
+storefront sebaiknya memakai `serverTime` untuk mengoreksi selisih jam perangkat, bukan jam lokal
+user.
+
+### Aturan harga dan stok
+
+- Harga dasar per item: `product_variants.price` kalau `variantId` terisi, kalau tidak
+  `products.base_price`.
+- `percentage` dihitung dari harga dasar, `fixed` dipotong langsung, keduanya dibulatkan ke dua
+  desimal dan tidak pernah menghasilkan harga negatif.
+- Sisa stok = `stock - sold`, minimum 0.
+- Pembelian ditolak kalau quantity melebihi sisa stok, atau kalau `purchasedByUser + quantity`
+  melebihi `perUserLimit`. `perUserLimit` null berarti tanpa batas.
+- Ledger `flash_sale_purchases` menyimpan satu baris per pembelian yang diterima. Inilah sumber
+  angka "sudah beli berapa" untuk FLS-006, bukan `order_items`, karena order biasa tidak selalu
+  lewat flash sale.
+- Update stok memakai syarat `sold + quantity <= stock` di klausa WHERE, jadi dua pembeli
+  bersamaan tidak bisa oversell. Update stok dan insert ledger berada dalam satu transaksi.
+
+### Kode error
+
+| Kode | HTTP | Arti |
+| --- | --- | --- |
+| `INVALID_WINDOW` | 400 | `endAt` tidak setelah `startAt`, atau tanggal tidak valid |
+| `INVALID_TITLE` | 400 | Judul di luar 3 sampai 150 karakter |
+| `INVALID_DISCOUNT` | 400 | Tipe diskon tidak dikenal, nilai <= 0, atau persentase > 100 |
+| `INVALID_STOCK` | 400 | Stok bukan bilangan bulat >= 0, atau lebih kecil dari jumlah terjual |
+| `INVALID_QUANTITY` | 400 | Quantity bukan bilangan bulat positif |
+| `INVALID_LIMIT` | 400 | `perUserLimit` bukan bilangan bulat positif dan bukan null |
+| `SALE_NOT_FOUND` | 404 | Sale tidak ada |
+| `ITEM_NOT_FOUND` | 404 | Item tidak ada atau bukan milik sale tersebut |
+| `ITEM_ALREADY_EXISTS` | 409 | Produk dan varian yang sama sudah ada di sale itu |
+| `SALE_INACTIVE` | 403 | Sale sedang dinonaktifkan |
+| `SALE_NOT_STARTED` | 403 | Sale belum dimulai |
+| `SALE_ENDED` | 403 | Sale sudah berakhir |
+| `OUT_OF_STOCK` | 409 | Sisa alokasi tidak cukup |
+| `PER_USER_LIMIT_REACHED` | 409 | Batas pembelian per user tercapai |
+
+### Keputusan yang masih terbuka
+
+- Checkout belum memanggil endpoint `purchase`. Endpoint ini adalah primitif alokasi stok plus
+  ledger; penautan ke pembuatan order dan pembayaran masih menunggu integrasi checkout. Selama
+  belum ditautkan, `orderId` boleh null dan pemanggil bertanggung jawab menyimpan referensinya.
+- Antrean high demand (FLS-003) belum dibangun, karena di PRD prioritasnya P2 dan tidak masuk
+  daftar Phase 3 di checklist.
+- Sale yang dinonaktifkan di tengah jalan tidak mengembalikan stok yang sudah terjual. Stok
+  dikembalikan hanya lewat pembatalan order, dan alur itu belum ada di modul ini.

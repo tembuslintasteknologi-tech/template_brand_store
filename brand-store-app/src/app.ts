@@ -30,6 +30,7 @@ import { adminBranchRoutes, branchRoutes } from './routes/branches.js';
 import { flashSaleAdminRoutes, flashSaleRoutes } from './routes/flashSales.js';
 import { loyaltyAdminRoutes, loyaltyRoutes } from './routes/loyalty.js';
 import { referralAdminRoutes, referralRoutes } from './routes/referral.js';
+import { walletAdminRoutes, walletRoutes } from './routes/wallet.js';
 import { pingDatabase } from './db/index.js';
 import { redisPing } from './config/redis.js';
 
@@ -142,6 +143,8 @@ export function createApp() {
   api.route('/admin', loyaltyAdminRoutes);
   api.route('/referrals', referralRoutes);
   api.route('/admin', referralAdminRoutes);
+  api.route('/wallet', walletRoutes);
+  api.route('/admin', walletAdminRoutes);
 
   app.route('/api/v1', api);
   app.route('/webhooks/logistics', logisticsWebhookRoutes);

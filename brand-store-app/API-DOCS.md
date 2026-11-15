@@ -512,3 +512,95 @@ diselesaikan dengan percobaan berikutnya, bukan dengan tebakan acak.
 - Leaderboard referral (RFR-006) belum dibuat karena P2 dan di luar daftar Phase 3.
 - Kode yang sudah dibuat tidak bisa diganti sendiri oleh customer. Belum ada endpoint regenerasi,
   karena setiap regenerasi akan mematikan link lama yang sudah tersebar.
+
+## Store Credit Wallet (WLT-001, WLT-002, WLT-003)
+
+Modul wallet berada di balik feature flag `wallet` (default `true`). Semua route mengembalikan
+`403 FEATURE_DISABLED` kalau flag dimatikan.
+
+Saldo disimpan di kolom `decimal(12,2)`, tetapi seluruh aritmetika di modul berjalan dalam integer
+sen. Nominal dengan lebih dari dua desimal ditolak, bukan dibulatkan diam-diam, karena saldo wallet
+yang kehilangan pecahan rupiah lebih buruk daripada error yang jelas.
+
+Setiap perubahan saldo menulis satu baris `wallet_transactions` berisi `balance_before` dan
+`balance_after` dari nilai yang benar-benar di-commit Postgres, jadi ledger selalu bisa direkonsiliasi
+terhadap saldo.
+
+### Endpoint customer
+
+- `GET /api/v1/wallet` (butuh login): saldo, mata uang, konfigurasi program aktif, dan 20 transaksi
+  terbaru. Wallet dibuat otomatis pada pembacaan pertama.
+- `GET /api/v1/wallet/program` (tanpa login): konfigurasi program aktif, dipakai storefront untuk
+  menampilkan banner cashback.
+- `GET /api/v1/wallet/transactions?type=payment&limit=50` (butuh login): riwayat transaksi, terbaru
+  dulu, maksimum 200 baris. `type` opsional, nilainya salah satu dari `topup`, `payment`, `refund`,
+  `cashback`, `adjustment`, `expiry`.
+- `POST /api/v1/wallet/preview` (butuh login): body `{ "orderTotal": 150000 }`. Hanya membaca, tidak
+  menulis. Mengembalikan `balance`, `amount`, `payable`, `shortfall`, dan `program`, supaya tombol
+  bayar bisa dinonaktifkan sebelum customer menekan apa pun.
+- `POST /api/v1/wallet/pay` (butuh login): body `{ "orderId": "uuid" }`. Melunasi total order penuh
+  dari saldo, menandai order `paid` dengan `paymentDetails.gateway = "wallet"`, lalu memberi cashback
+  kalau program aktif.
+
+Order hanya bisa dibayar dari wallet kalau statusnya `pending`, `waiting_payment`, atau `unpaid`, dan
+order itu memang milik pemanggil. Pembayaran sebagian tidak didukung: saldo harus menutup total order,
+kalau tidak endpoint membalas `409 INSUFFICIENT_BALANCE` beserta kekurangannya di preview. Uang keluar
+dari wallet lebih dulu, dan kalau update order gagal, debit dibalik dengan baris `refund` supaya
+customer tidak pernah tertagih untuk order yang tidak berubah status.
+
+### Endpoint admin
+
+- `GET /api/v1/admin/wallets?limit=50`: daftar wallet beserta email pemilik, terbaru dulu, maksimum
+  200 baris, untuk pencarian oleh tim support.
+- `GET /api/v1/admin/wallets/{userId}`: saldo dan riwayat satu akun. Tidak membuat wallet baru, jadi
+  salah ketik id tidak menghasilkan baris kosong.
+- `POST /api/v1/admin/wallets/{userId}/credit`: body `{ "amount": 50000, "note": "opsional" }`,
+  topup manual atau kompensasi. Mencatat transaksi bertipe `topup`.
+- `POST /api/v1/admin/wallets/{userId}/adjust`: body
+  `{ "amount": 25000, "direction": "debit", "note": "opsional" }`. `direction` wajib eksplisit karena
+  `adjustment` satu-satunya tipe yang boleh dipilih arahnya sendiri.
+- `GET /api/v1/admin/wallets/program` dan `PUT /api/v1/admin/wallets/program`: baca dan tulis
+  konfigurasi, tersimpan di settings key `wallet.program`. Body
+  `{ "cashbackPercent": 5, "cashbackMaxAmount": 25000, "minimumPayment": 10000, "currency": "IDR" }`.
+- `POST /api/v1/admin/orders/{orderId}/cashback`: memberi cashback untuk order yang sudah lunas lewat
+  gateway lain. Aman dipanggil berulang karena referensi yang sama dibalas `409` alih-alih dibayar
+  dua kali.
+
+### Cashback
+
+Cashback dihitung dari total order: persen dari total, dibulatkan ke bawah ke rupiah utuh, lalu
+dipotong batas maksimum kalau diatur. Persen default 0 karena tarif adalah keputusan bisnis, bukan
+angka yang boleh dikarang modul. Admin mengaktifkannya lewat `PUT /api/v1/admin/wallets/program`.
+
+Cashback otomatis hanya berjalan pada pembayaran wallet. Order yang lunas lewat gateway pembayaran
+memakai endpoint admin cashback, dan kegagalan penulisan cashback tidak membatalkan pembayaran karena
+order memang sudah lunas.
+
+### Tabel error
+
+| Kode | HTTP | Arti |
+| --- | --- | --- |
+| `INVALID_AMOUNT` | 400 | Nominal kosong, bukan angka, lebih dari dua desimal, atau nol ke bawah |
+| `INVALID_TYPE` | 400 | Jenis transaksi tidak dikenal |
+| `INVALID_DIRECTION` | 400 | Arah bukan `credit` atau `debit` |
+| `INVALID_PROGRAM` | 400 | Konfigurasi program bukan objek atau mata uang kosong |
+| `INVALID_CASHBACK_PERCENT` | 400 | Persentase cashback di luar 0 sampai 100 |
+| `INVALID_CASHBACK_CAP` | 400 | Batas cashback negatif atau bukan angka |
+| `INVALID_MINIMUM` | 400 | Minimum pembayaran negatif atau bukan angka |
+| `INSUFFICIENT_BALANCE` | 409 | Saldo tidak cukup, baik saat debit maupun saat melunasi order |
+| `MINIMUM_NOT_MET` | 400 | Total order di bawah minimum pembayaran wallet |
+| `WALLET_NOT_FOUND` | 404 | Wallet tidak ada untuk akun ini |
+| `ORDER_NOT_FOUND` | 404 | Order tidak ada atau bukan milik pemanggil |
+| `ORDER_NOT_PAYABLE` | 409 | Status order tidak bisa dibayar dari wallet, atau belum lunas saat cashback diminta |
+| `DUPLICATE_TRANSACTION` | 409 | Referensi yang sama sudah pernah dicatat untuk tipe transaksi itu |
+
+### Keputusan yang masih terbuka
+
+- Checkout belum memakai wallet. Customer membayar lewat `POST /api/v1/wallet/pay` setelah order
+  dibuat, bukan memilih wallet sebagai metode saat checkout.
+- Belum ada endpoint topup mandiri karena butuh integrasi gateway pembayaran. Untuk sekarang saldo
+  masuk lewat kredit admin.
+- Saldo belum punya kedaluwarsa. Tipe `expiry` sudah ada di ledger tetapi belum ada penjadwal yang
+  memakainya.
+- Belum ada transfer saldo antar akun, dan tidak direncanakan tanpa keputusan bisnis eksplisit.
+

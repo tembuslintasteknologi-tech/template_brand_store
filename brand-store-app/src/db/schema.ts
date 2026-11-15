@@ -718,6 +718,13 @@ export const walletTransactions = pgTable('wallet_transactions', {
   walletIdx: index('wallet_tx_wallet_idx').on(table.walletId),
   typeIdx: index('wallet_tx_type_idx').on(table.type),
   createdIdx: index('wallet_tx_created_idx').on(table.createdAt),
+  // One cashback or one payment per reference. Postgres allows many NULL reference ids, so
+  // admin adjustments and manual topups are unaffected while an order can never be paid twice.
+  referenceIdx: uniqueIndex('wallet_tx_wallet_type_reference_idx').on(
+    table.walletId,
+    table.type,
+    table.referenceId
+  ),
 }));
 
 // ---------------------------------------------------------------------------

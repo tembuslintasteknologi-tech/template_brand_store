@@ -101,6 +101,33 @@ test('Database Schema Verification: All Required Tables and Columns Defined', as
     assert.ok(fs.existsSync(migrationFile), '0011_referral.sql must exist');
   });
 
+  await t.test('wallet ledger has a unique reference index so one order cannot be paid twice', () => {
+    const tx = (schema as any).walletTransactions;
+    assert.ok(tx, 'walletTransactions table must exist');
+    assert.ok(tx.referenceType, 'walletTransactions.referenceType must exist');
+    assert.ok(tx.referenceId, 'walletTransactions.referenceId must exist');
+
+    // Drizzle stores indexes behind a builder that cannot be re-invoked after registration,
+    // so the source declaration is the readable proof here. The migration assertion below
+    // checks the SQL that actually reaches Postgres.
+    const schemaSource = fs.readFileSync(
+      path.resolve(process.cwd(), 'src/db/schema.ts'),
+      'utf8'
+    );
+    assert.match(
+      schemaSource,
+      /uniqueIndex\('wallet_tx_wallet_type_reference_idx'\)\.on\(\s*table\.walletId,\s*table\.type,\s*table\.referenceId\s*\)/,
+      'schema.ts must declare the unique index on (walletId, type, referenceId)'
+    );
+  });
+
+  await t.test('drizzle migration 0012_wallet_ledger.sql exists and declares the unique index', () => {
+    const migrationFile = path.resolve(process.cwd(), 'drizzle/0012_wallet_ledger.sql');
+    assert.ok(fs.existsSync(migrationFile), '0012_wallet_ledger.sql must exist');
+    const sql = fs.readFileSync(migrationFile, 'utf8');
+    assert.match(sql, /CREATE UNIQUE INDEX IF NOT EXISTS "wallet_tx_wallet_type_reference_idx"/);
+  });
+
   await t.test('notifications, notification_templates, notification_preferences exist', () => {
     assert.ok(schema.notifications, 'notifications table must exist');
     assert.ok(schema.notificationTemplates, 'notificationTemplates table must exist');

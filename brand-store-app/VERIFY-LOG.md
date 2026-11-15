@@ -1269,3 +1269,95 @@ Catatan:
     "<referralId>:referrer" serta "<referralId>:referee", jadi unique index earn yang sudah ada
     membuat verifikasi ganda tidak bisa membayar dua kali. Ini belum diuji lewat database sungguhan,
     hanya dinilai dari jalur kode dan unit test aturan murni.
+
+---
+2026-11-15 (lanjutan 14)
+Task: WLT Phase 3 item 4, modul Store Credit Wallet (WLT-001, WLT-002, WLT-003)
+Jenis perubahan: fitur baru (service, repository, route, schema, migrasi, test, docs).
+File yang berubah:
+  A  src/services/wallet/walletService.ts
+  A  src/services/wallet/walletRepository.ts
+  A  src/routes/wallet.ts
+  A  src/tests/wallet.test.ts
+  A  drizzle/0012_wallet_ledger.sql
+  M  src/db/schema.ts                      (unique index wallet_tx_wallet_type_reference_idx)
+  M  src/services/config/settings.ts       (walletProgramSettingSchema, validator wallet.program)
+  M  src/app.ts                            (mount walletRoutes + walletAdminRoutes)
+  M  src/tests/databaseSchema.test.ts      (assert index unik wallet + migrasi 0012)
+  M  API-DOCS.md                           (section Store Credit Wallet)
+  M  TASK-CHECKLIST.md                     (baris wallet jadi [x])
+  M  VERIFY-LOG.md                         (blok ini)
+Command:
+  npx tsc --noEmit
+Output:
+  TSC_EXIT=0
+Command:
+  node --import tsx/esm --test src/tests/wallet.test.ts
+Output:
+  1..7
+  # tests 46
+  # suites 0
+  # pass 46
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+  # duration_ms 281.7043
+Command:
+  node --import tsx/esm --test src/tests/databaseSchema.test.ts
+Output:
+  1..1
+  # tests 19
+  # suites 0
+  # pass 19
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+  # duration_ms 819.8102
+Command:
+  npx tsc --noEmit ; npm test
+Output:
+  TSC_EXIT=0
+  # tests 659
+  # suites 51
+  # pass 659
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+Command:
+  node --import tsx/esm _smoke_wallet.ts   (script sementara, sudah dihapus)
+Output:
+  GET  /api/v1/wallet/program -> 200 {"success":true,"data":{"cashbackPercent":0,"cashbackMaxAmount":null,"minimumPayment":0,"currency":"IDR"},"requestId":"799161e3-6662-44ca-85e2-b343884287b8"}
+  GET  /api/v1/wallet (no token) -> 401 {"success":false,"error":{"code":"UNAUTHORIZED","message":"Unauthorized: Missing or malformed token"}}
+  GET  /api/v1/admin/wallets (no token) -> 401
+  POST /api/v1/wallet/pay (no token) -> 401
+  POST /api/v1/wallet/preview (no token) -> 401
+  GET  /api/v1/wallet/transactions (no token) -> 401
+  GET  /api/v1/wallet/does-not-exist -> 404
+  GET  /api/v1/admin/wallets/no-such-route/x/y -> 401
+  POST /api/v1/admin/orders/00000000-0000-0000-0000-000000000000/cashback (no token) -> 401
+Catatan:
+  - GET /api/v1/wallet/program membalas 200 tanpa Postgres hidup karena getSettingValue menangkap
+    error database dan mengembalikan fallback, jadi yang terlihat adalah DEFAULT_WALLET_PROGRAM.
+    Cashback 0 pada respons itu memang default, bukan bug: tarif adalah keputusan bisnis.
+  - Path asing di bawah /api/v1/admin/* dibalas 401 dan bukan 404 karena featureGate dan auth
+    dipasang lewat use('*') pada router admin, jadi guard berjalan sebelum pencocokan route. Modul
+    admin lain memakai pola yang sama.
+  - Uang dihitung sebagai integer sen di seluruh modul. Decimal string dari Postgres dikonversi
+    lewat toCents, dan nominal dengan lebih dari dua desimal ditolak, bukan dibulatkan diam-diam.
+  - Debit menaruh syarat balance >= amount di klausa WHERE, bukan pada nilai yang dibaca sebelumnya,
+    sehingga dua pembayaran bersamaan tidak bisa sama-sama lolos. Ini belum diuji dengan dua koneksi
+    sungguhan karena Postgres lokal menolak login (password authentication failed for user
+    "postgres"), hanya dinilai dari bentuk query dan unit test aturan murni.
+  - Unique index (wallet_id, type, reference_id) adalah penjaga sebenarnya untuk pembayaran ganda.
+    Postgres membolehkan banyak NULL, jadi topup dan adjustment admin yang berreference_id null
+    tidak terbatasi.
+  - Assert index unik di databaseSchema.test.ts membaca deklarasi di schema.ts, bukan introspeksi
+    objek drizzle. Index drizzle disimpan di balik builder yang tidak bisa dipanggil ulang setelah
+    registrasi (percobaan kedua melempar SyntaxError dari JSON.parse undefined), dan SQL yang
+    benar-benar sampai ke Postgres sudah diuji terpisah lewat isi 0012_wallet_ledger.sql.
+  - Jalur 200 untuk saldo, riwayat, preview, bayar, kredit, dan adjustment admin belum terbukti
+    karena Postgres lokal menolak login. Yang terbukti: route ter-mount, guard 401 jalan pada
+    customer dan admin, feature gate wallet terpasang, dan path asing 404.

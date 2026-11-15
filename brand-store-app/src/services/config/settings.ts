@@ -82,6 +82,18 @@ export const referralProgramSettingSchema = z.object({
   maxReferralsPerUser: z.number().int().nonnegative().nullable(),
 });
 
+/**
+ * Shape check for the wallet program stored in settings. Values are re-validated through
+ * resolveWalletProgram on read, so a hand-edited row cannot produce a negative cap or a
+ * percentage above 100.
+ */
+export const walletProgramSettingSchema = z.object({
+  cashbackPercent: z.number().min(0).max(100),
+  cashbackMaxAmount: z.number().min(0).nullable(),
+  minimumPayment: z.number().min(0),
+  currency: z.string().min(1).max(10),
+});
+
 export const settingValidators: Record<string, z.ZodTypeAny> = {
   'brand.name': z.object({ text: z.string().min(1).max(120) }),
   'brand.currency': z.object({ code: z.string().length(3) }),
@@ -95,6 +107,7 @@ export const settingValidators: Record<string, z.ZodTypeAny> = {
   'loyalty.program': loyaltyProgramSettingSchema,
   'referral.program': referralProgramSettingSchema,
   'referral.baseUrl': z.object({ url: z.string().url() }),
+  'wallet.program': walletProgramSettingSchema,
   feature_flags: featureFlagsSchema,
   'maintenance.mode': z.object({
     enabled: z.boolean(),

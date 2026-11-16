@@ -150,4 +150,26 @@ test('Database Schema Verification: All Required Tables and Columns Defined', as
     const entry0006 = journal.entries.find((e: any) => e.tag === '0006_complete_db_tables');
     assert.ok(entry0006, 'Journal entry for 0006_complete_db_tables must exist');
   });
+
+  await t.test('banners carry an audience segment and banner_events records impressions', () => {
+    const bannersTable = (schema as any).banners;
+    const events = (schema as any).bannerEvents;
+    assert.ok(bannersTable, 'banners table must exist');
+    assert.ok(bannersTable.audience, 'banners.audience must exist');
+    assert.ok(events, 'bannerEvents table must exist');
+    assert.ok(events.bannerId, 'bannerEvents.bannerId must exist');
+    assert.ok(events.eventType, 'bannerEvents.eventType must exist');
+    assert.ok(events.audience, 'bannerEvents.audience must exist');
+    assert.ok(events.sessionId, 'bannerEvents.sessionId must exist');
+    assert.ok(events.userId, 'bannerEvents.userId must exist');
+  });
+
+  await t.test('drizzle migration 0013_banner_events.sql exists and is idempotent', () => {
+    const migrationFile = path.resolve(process.cwd(), 'drizzle/0013_banner_events.sql');
+    assert.ok(fs.existsSync(migrationFile), '0013_banner_events.sql must exist');
+    const sql = fs.readFileSync(migrationFile, 'utf8');
+    assert.match(sql, /ADD COLUMN IF NOT EXISTS "audience"/);
+    assert.match(sql, /CREATE TABLE IF NOT EXISTS "banner_events"/);
+    assert.match(sql, /CREATE INDEX IF NOT EXISTS "banner_events_lookup_idx"/);
+  });
 });

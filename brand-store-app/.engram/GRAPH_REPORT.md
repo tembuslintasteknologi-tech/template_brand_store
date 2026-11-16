@@ -1,25 +1,25 @@
-# Graph Report - .  (2026-11-15)
+# Graph Report - .  (2026-11-16)
 
 ## Corpus Check
-- 198 files · ~131,273 words
+- 198 files · ~133,903 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1449 nodes · 3542 edges · 64 communities detected
+- 1466 nodes · 3578 edges · 64 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
-- Edge kinds: contains: 1110 · imports: 1006 · calls: 443 · imports_from: 429 · MODIFIES: 238 · ON_BRANCH: 107 · method: 85 · references: 61 · PARENT_OF: 45 · inherits: 8 · implements: 5 · re_exports: 4 · cites: 1
+- Edge kinds: contains: 1126 · imports: 1016 · calls: 450 · imports_from: 429 · MODIFIES: 238 · ON_BRANCH: 108 · method: 85 · references: 61 · PARENT_OF: 46 · inherits: 9 · implements: 5 · re_exports: 4 · cites: 1
 
 
 ## Input Scope
 - Requested: auto
 - Resolved: committed (source: default-auto)
-- Included files: 198 · Candidates: 525
-- Excluded: 0 untracked · 20618 ignored · 2 sensitive · 0 missing committed
+- Included files: 198 · Candidates: 530
+- Excluded: 6 untracked · 20618 ignored · 2 sensitive · 0 missing committed
 - Recommendation: Use --scope all or graphify.yaml inputs.corpus for a knowledge-base folder.
 
 ## Graph Freshness
-- Built from Git commit: `6aebfc9`
+- Built from Git commit: `020d2b2`
 - Compare this hash to `git rev-parse HEAD` before trusting freshness-sensitive graph output.
 ## God Nodes (most connected - your core abstractions)
 1. `db` - 47 edges
@@ -37,9 +37,9 @@
 - `assertBranchCanFulfill()` --calls--> `OrderSourceError`  [EXTRACTED]
   src/services/branch/orderSourceService.ts → src/services/branch/orderSourceService.ts  _Bridges community 17 → community 24_
 - `d4f150d chore: restore recovered application files` --ON_BRANCH--> `restore-recovered-files`  [EXTRACTED]
-  git → git  _Bridges community 6 → community 11_
+  git → git  _Bridges community 6 → community 12_
 - `getShowAggregatorWithinRadius()` --calls--> `getSettingValue()`  [EXTRACTED]
-  src/services/config/settings.ts → src/services/config/settings.ts  _Bridges community 40 → community 8_
+  src/services/config/settings.ts → src/services/config/settings.ts  _Bridges community 40 → community 9_
 - `addFlashSaleItem()` --calls--> `assertItemNotDuplicated()`  [EXTRACTED]
   src/services/promo/flashSaleRepository.ts → src/services/promo/flashSaleRepository.ts  _Bridges community 34 → community 27_
 - `d4f150d chore: restore recovered application files` --ON_BRANCH--> `restore-recovered-files`  [EXTRACTED]
@@ -80,36 +80,36 @@ Cohesion: 0.09
 Nodes (44): wallets, walletTransactions, adjustWallet(), creditOrderCashback(), creditWallet(), debitWallet(), getOrCreateWallet(), getWalletForAdmin() (+36 more)
 
 ### Community 8 - "Community 8"
-Cohesion: 0.09
-Nodes (35): BrandProfile, brandProfileSchema, ConfigError, DEFAULT_FEATURE_FLAGS, featureFlagsSchema, getBrandProfile(), getFeatureFlags(), getMaintenanceMode() (+27 more)
+Cohesion: 0.08
+Nodes (39): aggregateBannerMetrics(), BANNER_AUDIENCES, BANNER_EVENT_TYPES, BannerAnalyticsRow, BannerAudience, bannerEventSchema, BannerEventType, BannerMetrics (+31 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.09
-Nodes (30): unifiedConfig, client, closeDatabase(), pingDatabase(), ARGON2_OPTIONS, defaultSettings(), ensureCatalog(), ensureInventory() (+22 more)
+Nodes (35): BrandProfile, brandProfileSchema, ConfigError, DEFAULT_FEATURE_FLAGS, featureFlagsSchema, getBrandProfile(), getFeatureFlags(), getMaintenanceMode() (+27 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.09
-Nodes (15): ManualBankProvider, PaymentProvider, ENABLED_PAYMENTS, MidtransOptions, MidtransProvider, PaymentGatewayError, PaymentProvider, allowUnsignedWebhook() (+7 more)
+Nodes (30): unifiedConfig, client, closeDatabase(), pingDatabase(), ARGON2_OPTIONS, defaultSettings(), ensureCatalog(), ensureInventory() (+22 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.14
-Nodes (37): backup/pre-secret-clean-main, backup/pre-secret-clean-recovery, main, rescue-recovered-15020f0, restore-recovered-files, sanitized-main, 0bc44bb feat(BR-013): dashboard cabang, 0de5313 feat(branch): fondasi multi cabang BR-001..BR-004 (schema, scoping, stok per cabang) (+29 more)
+Cohesion: 0.09
+Nodes (15): ManualBankProvider, PaymentProvider, ENABLED_PAYMENTS, MidtransOptions, MidtransProvider, PaymentGatewayError, PaymentProvider, allowUnsignedWebhook() (+7 more)
 
 ### Community 12 - "Community 12"
+Cohesion: 0.14
+Nodes (38): backup/pre-secret-clean-main, backup/pre-secret-clean-recovery, main, rescue-recovered-15020f0, restore-recovered-files, sanitized-main, 020d2b2 docs(checklist): audit status Phase 3 Advanced, 4 baris partial jadi [~] dan rekap dihitung ulang, 0bc44bb feat(BR-013): dashboard cabang (+30 more)
+
+### Community 13 - "Community 13"
 Cohesion: 0.10
 Nodes (30): reviewHelpfulVotes, reviewReports, reviews, canWriteReview(), createReview(), hasPurchasedProduct(), helpfulCountsFor(), isPublicReview() (+22 more)
 
-### Community 13 - "Community 13"
+### Community 14 - "Community 14"
 Cohesion: 0.12
 Nodes (30): assertFlashSaleDiscount(), assertFlashSaleItemInput(), assertFlashSalePerUserLimit(), assertFlashSaleStock(), assertFlashSaleTitle(), assertFlashSaleWindow(), evaluateFlashSalePurchase(), FLASH_SALE_DISCOUNT_TYPES (+22 more)
 
-### Community 14 - "Community 14"
-Cohesion: 0.12
-Nodes (21): closeRedis(), ensureRedisConnected(), getRedisClient(), redisPing(), clearFailureCache(), clearFailures(), failureKey(), getLockState() (+13 more)
-
 ### Community 15 - "Community 15"
 Cohesion: 0.12
-Nodes (23): bannerSchema, BannerWindow, ContentError, createBanner(), deleteBanner(), isBannerLive(), listAllBanners(), listPublicBanners() (+15 more)
+Nodes (21): closeRedis(), ensureRedisConnected(), getRedisClient(), redisPing(), clearFailureCache(), clearFailures(), failureKey(), getLockState() (+13 more)
 
 ### Community 16 - "Community 16"
 Cohesion: 0.13
@@ -304,7 +304,7 @@ Cohesion: 0.50
 Nodes (2): app, server
 
 ## Knowledge Gaps
-- **303 isolated node(s):** `categories`, `promos`, `settings`, `store_locations`, `users` (+298 more)
+- **307 isolated node(s):** `categories`, `promos`, `settings`, `store_locations`, `users` (+302 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **Thin community `Community 42`** (1 nodes): `LogisticAggregator`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -322,14 +322,14 @@ Nodes (2): app, server
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `db` connect `Community 36` to `Community 26`, `Community 1`, `Community 49`, `Community 32`, `Community 5`, `Community 17`, `Community 0`, `Community 22`, `Community 18`, `Community 8`, `Community 15`, `Community 9`, `Community 24`, `Community 2`, `Community 4`, `Community 27`, `Community 3`, `Community 6`, `Community 12`, `Community 40`, `Community 37`, `Community 25`, `Community 20`, `Community 7`, `Community 19`, `Community 23`?**
+- **Why does `db` connect `Community 36` to `Community 26`, `Community 1`, `Community 49`, `Community 32`, `Community 5`, `Community 17`, `Community 0`, `Community 22`, `Community 18`, `Community 9`, `Community 8`, `Community 10`, `Community 24`, `Community 2`, `Community 4`, `Community 27`, `Community 3`, `Community 6`, `Community 13`, `Community 40`, `Community 37`, `Community 25`, `Community 20`, `Community 7`, `Community 19`, `Community 23`?**
   _High betweenness centrality (0.070) - this node is a cross-community bridge._
 - **Why does `TembusOnDemandProvider` connect `Community 30` to `Community 6`, `Community 16`, `Community 50`?**
   _High betweenness centrality (0.019) - this node is a cross-community bridge._
 - **Why does `TembusAggregatorProvider` connect `Community 33` to `Community 6`, `Community 16`, `Community 50`?**
-  _High betweenness centrality (0.018) - this node is a cross-community bridge._
+  _High betweenness centrality (0.017) - this node is a cross-community bridge._
 - **What connects `categories`, `promos`, `settings` to the rest of the system?**
-  _303 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _307 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
   _Cohesion score 0.05128205128205128 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**

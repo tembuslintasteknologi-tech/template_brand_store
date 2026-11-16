@@ -1,11 +1,18 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
 import { orders } from '../db/schema.js';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and, lt, or } from 'drizzle-orm';
 import { orderSchema } from '../validators/schemas.js';
 import { authMiddleware, adminOnlyMiddleware } from '../middleware/auth.js';
 import { OrderSourceError } from '../services/branch/orderSourceService.js';
 import { createOrderWithItems } from '../services/order/orderCreateService.js';
+import {
+  PaginationError,
+  buildCursorPage,
+  clampPageSize,
+  decodeCursor,
+  parseFields,
+} from '../utils/pagination.js';
 
 export const orderRoutes = new Hono();
 
@@ -45,23 +52,76 @@ orderRoutes.post('/', authMiddleware, async (c) => {
   }
 });
 
-// Customer: Get own orders
+// Customer: Get own orders, newest first, cursor paginated for mobile.
 orderRoutes.get('/my-orders', authMiddleware, async (c) => {
   try {
     const user = c.get('user') as { id: string; role: string; email: string };
-    const userOrders = await db.select().from(orders).where(eq(orders.customerId, user.id)).orderBy(desc(orders.createdAt));
-    return c.json({ success: true, data: userOrders });
+    const limit = clampPageSize(c.req.query('limit'));
+    const fields = parseFields(c.req.query('fields'));
+    const cursor = decodeCursor(c.req.query('cursor'));
+
+    const conditions: any[] = [eq(orders.customerId, user.id)];
+    if (cursor) {
+      const at = new Date(cursor.createdAt);
+      conditions.push(
+        or(lt(orders.createdAt, at), and(eq(orders.createdAt, at), lt(orders.id, cursor.id as any)))
+      );
+    }
+
+    const rows = await db
+      .select()
+      .from(orders)
+      .where(and(...conditions))
+      .orderBy(desc(orders.createdAt), desc(orders.id))
+      .limit(limit + 1);
+
+    const page = buildCursorPage(rows as any[], limit, { fields });
+    c.header('Cache-Control', 'private, no-store');
+    return c.json({
+      success: true,
+      data: page.items,
+      page: { nextCursor: page.nextCursor, hasMore: page.hasMore, limit: page.limit },
+    });
   } catch (err: any) {
+    if (err instanceof PaginationError) {
+      return c.json({ success: false, error: { code: err.code, message: err.message } }, 400);
+    }
     return c.json({ success: false, error: err.message }, 500);
   }
 });
 
-// Admin: Get all orders
+// Admin: Get all orders, cursor paginated instead of loading the whole table.
 orderRoutes.get('/admin/all', authMiddleware, adminOnlyMiddleware, async (c) => {
   try {
-    const allOrders = await db.select().from(orders).orderBy(desc(orders.createdAt));
-    return c.json({ success: true, data: allOrders });
+    const limit = clampPageSize(c.req.query('limit'));
+    const fields = parseFields(c.req.query('fields'));
+    const cursor = decodeCursor(c.req.query('cursor'));
+
+    const conditions: any[] = [];
+    if (cursor) {
+      const at = new Date(cursor.createdAt);
+      conditions.push(
+        or(lt(orders.createdAt, at), and(eq(orders.createdAt, at), lt(orders.id, cursor.id as any)))
+      );
+    }
+
+    const rows = await db
+      .select()
+      .from(orders)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(orders.createdAt), desc(orders.id))
+      .limit(limit + 1);
+    const page = buildCursorPage(rows as any[], limit, { fields });
+    c.header('Cache-Control', 'private, no-store');
+    return c.json({
+      success: true,
+      data: page.items,
+      page: { nextCursor: page.nextCursor, hasMore: page.hasMore, limit: page.limit },
+    });
   } catch (err: any) {
+    if (err instanceof PaginationError) {
+      return c.json({ success: false, error: { code: err.code, message: err.message } }, 400);
+    }
     return c.json({ success: false, error: err.message }, 500);
   }
 });

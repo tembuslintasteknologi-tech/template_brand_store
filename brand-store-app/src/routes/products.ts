@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
 import { products, categories } from '../db/schema.js';
-import { eq, ilike, and, desc } from 'drizzle-orm';
+import { eq, ilike, and, desc, lt, or } from 'drizzle-orm';
 import { productSchema } from '../validators/schemas.js';
 import { authMiddleware, adminOnlyMiddleware } from '../middleware/auth.js';
 import {
@@ -9,29 +9,64 @@ import {
   listProductBranchAvailability,
 } from '../services/branch/branchAvailabilityService.js';
 import { getShowAggregatorWithinRadius } from '../services/config/settings.js';
+import {
+  PaginationError,
+  buildCursorPage,
+  clampPageSize,
+  decodeCursor,
+  parseFields,
+  projectRow,
+} from '../utils/pagination.js';
 
 export const productRoutes = new Hono();
 
-// Public: List products with search & category filter
+// Public: List products with search, category filter, cursor pagination and field projection.
+// Mobile clients pass `limit` small and follow `page.nextCursor` instead of offset walking.
 productRoutes.get('/', async (c) => {
   try {
     const search = c.req.query('search');
     const categoryId = c.req.query('categoryId');
+    const limit = clampPageSize(c.req.query('limit'));
+    const fields = parseFields(c.req.query('fields'));
+    const cursor = decodeCursor(c.req.query('cursor'));
 
-    let query = db.select().from(products);
-    
-    const conditions = [eq(products.status, 'published')];
+    const conditions: any[] = [eq(products.status, 'published')];
     if (search) {
       conditions.push(ilike(products.title, `%${search}%`));
     }
     if (categoryId) {
       conditions.push(eq(products.categoryId, categoryId));
     }
+    if (cursor) {
+      const at = new Date(cursor.createdAt);
+      conditions.push(
+        or(
+          lt(products.createdAt, at),
+          and(eq(products.createdAt, at), lt(products.id, cursor.id as any))
+        )
+      );
+    }
 
-    const items = await db.select().from(products).where(and(...conditions)).orderBy(desc(products.createdAt));
+    const rows = await db
+      .select()
+      .from(products)
+      .where(and(...conditions))
+      .orderBy(desc(products.createdAt), desc(products.id))
+      .limit(limit + 1);
 
-    return c.json({ success: true, data: items });
+    const page = buildCursorPage(rows as any[], limit, { fields });
+
+    c.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    c.header('Vary', 'Accept-Encoding');
+    return c.json({
+      success: true,
+      data: page.items,
+      page: { nextCursor: page.nextCursor, hasMore: page.hasMore, limit: page.limit },
+    });
   } catch (err: any) {
+    if (err instanceof PaginationError) {
+      return c.json({ success: false, error: { code: err.code, message: err.message } }, 400);
+    }
     return c.json({ success: false, error: err.message }, 500);
   }
 });
@@ -56,7 +91,7 @@ productRoutes.get('/:slug/branches', async (c) => {
   }
 });
 
-// Public: Get product detail by slug
+// Public: Get product detail by slug. `fields` narrows the payload for mobile list to detail taps.
 productRoutes.get('/:slug', async (c) => {
   try {
     const slug = c.req.param('slug');
@@ -66,7 +101,10 @@ productRoutes.get('/:slug', async (c) => {
       return c.json({ success: false, error: 'Product not found' }, 404);
     }
 
-    return c.json({ success: true, data: product });
+    const fields = parseFields(c.req.query('fields'));
+    c.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    c.header('Vary', 'Accept-Encoding');
+    return c.json({ success: true, data: projectRow(product as unknown as Record<string, unknown>, fields) });
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
   }

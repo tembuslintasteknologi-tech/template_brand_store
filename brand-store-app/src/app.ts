@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { etag } from 'hono/etag';
+import { compress } from 'hono/compress';
 import { connect } from 'node:net';
 import { unifiedConfig } from './config/unifiedConfig.js';
 import {
@@ -100,6 +102,22 @@ export function createApp() {
     })
   );
   app.use('*', requestLogger());
+
+  // Compression pays off on the JSON list endpoints mobile clients poll. Placed after the
+  // logger so the logged byte count is the uncompressed payload.
+  app.use('*', compress());
+
+  // ETag only on anonymous read surfaces. Authenticated responses are deliberately excluded:
+  // a shared cache keyed on ETag can replay one user's body to another.
+  app.use('/health', etag());
+  app.use('/api/v1/products', etag());
+  app.use('/api/v1/products/*', etag());
+  app.use('/api/v1/banners', etag());
+  app.use('/api/v1/pages', etag());
+  app.use('/api/v1/pages/*', etag());
+  app.use('/api/v1/config', etag());
+  app.use('/api/v1/catalog', etag());
+  app.use('/api/v1/catalog/*', etag());
 
   app.get('/health', async (c) => {
     const report = await buildHealthReport();

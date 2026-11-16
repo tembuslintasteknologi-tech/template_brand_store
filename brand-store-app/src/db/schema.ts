@@ -50,6 +50,8 @@ export const products = pgTable('products', {
 }, (table) => ({
   slugIdx: index('products_slug_idx').on(table.slug),
   categoryIdx: index('products_category_idx').on(table.categoryId),
+  // Matches the public list: filter by status, order by createdAt desc with id as the tiebreak.
+  paginationIdx: index('products_pagination_idx').on(table.status, table.createdAt, table.id),
 }));
 
 export const productVariants = pgTable('product_variants', {
@@ -173,6 +175,9 @@ export const orders = pgTable('orders', {
 }, (table) => ({
   customerIdx: index('orders_customer_idx').on(table.customerId),
   orderNumberIdx: index('orders_number_idx').on(table.orderNumber),
+  // Cursor pagination: one index per list that walks newest first with id as the tiebreak.
+  customerPaginationIdx: index('orders_customer_pagination_idx').on(table.customerId, table.createdAt, table.id),
+  paginationIdx: index('orders_pagination_idx').on(table.createdAt, table.id),
 }));
 
 export const orderItems = pgTable('order_items', {
@@ -240,6 +245,8 @@ export const banners = pgTable('banners', {
   imageUrl: text('image_url').notNull(),
   linkUrl: text('link_url'),
   placement: varchar('placement', { length: 50 }).notNull().default('home_hero'),
+  // 'all' shows to everyone, 'guest' only to signed-out visitors, 'customer' only to signed-in ones.
+  audience: varchar('audience', { length: 50 }).notNull().default('all'),
   sortOrder: integer('sort_order').notNull().default(0),
   isActive: boolean('is_active').notNull().default(true),
   startAt: timestamp('start_at'),
@@ -249,6 +256,22 @@ export const banners = pgTable('banners', {
 }, (table) => ({
   placementIdx: index('banners_placement_idx').on(table.placement),
   activeIdx: index('banners_active_idx').on(table.isActive),
+  audienceIdx: index('banners_audience_idx').on(table.audience),
+}));
+
+// One row per impression or click. Deliberately append-only: no update path, so CTR is a
+// count over immutable facts and cannot be rewritten by a later admin edit.
+export const bannerEvents = pgTable('banner_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  bannerId: uuid('banner_id').notNull().references(() => banners.id, { onDelete: 'cascade' }),
+  eventType: varchar('event_type', { length: 20 }).notNull(), // 'view' | 'click'
+  audience: varchar('audience', { length: 50 }).notNull().default('guest'), // 'guest' | 'customer'
+  sessionId: varchar('session_id', { length: 100 }),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  bannerEventIdx: index('banner_events_lookup_idx').on(table.bannerId, table.eventType, table.createdAt),
+  eventTimeIdx: index('banner_events_time_idx').on(table.createdAt),
 }));
 
 export const pages = pgTable('pages', {

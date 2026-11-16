@@ -1477,3 +1477,119 @@ Catatan:
     jadi audit ini murni statis: membaca route, service, schema, dan hasil grep.
   - Satu baris checklist memakai karakter panah U+2194 pada judul live chat. Karakter itu
     dipertahankan apa adanya, dan tidak ada em dash yang ditambahkan pada baris baru.
+
+2026-11-16 (lanjutan 16)
+Task: Sisa Phase 3 yang bisa dikerjakan kode: optimasi API untuk mobile (cursor, ETag, kompresi, fields) dan banner analytics plus targeting (CMS-003, CMS-004). Baris load test hanya artefak, belum dijalankan.
+Jenis perubahan: kode produk, migrasi, test, dan dokumen.
+
+File yang berubah:
+  M  brand-store-app/src/app.ts                                (compress global, etag hanya rute baca anonim)
+  M  brand-store-app/src/db/schema.ts                          (banners.audience, bannerEvents, 3 indeks pagination)
+  M  brand-store-app/src/routes/content.ts                     (banner publik per segmen, POST event, admin analytics)
+  M  brand-store-app/src/routes/orders.ts                      (cursor pagination my-orders dan admin/all)
+  M  brand-store-app/src/routes/products.ts                    (limit, cursor, fields, cache publik)
+  M  brand-store-app/src/services/content/bannerService.ts     (audience, event, CTR, getBannerAnalytics)
+  M  brand-store-app/src/tests/content.test.ts                 (+7 test)
+  M  brand-store-app/src/tests/databaseSchema.test.ts          (+2 test)
+  A  brand-store-app/src/utils/pagination.ts
+  A  brand-store-app/src/tests/pagination.test.ts
+  A  brand-store-app/drizzle/0013_banner_events.sql
+  A  brand-store-app/drizzle/0014_pagination_indexes.sql
+  A  brand-store-app/loadtest/k6-smoke.js
+  A  brand-store-app/loadtest/README.md
+  M  TASK-CHECKLIST.md
+  M  VERIFY-LOG.md
+
+Command:
+  cd brand-store-app && npx tsc --noEmit
+Output:
+  tsc exit: 0
+
+Command:
+  cd brand-store-app && npm test
+Output:
+  # tests 676
+  # suites 51
+  # pass 676
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+
+Command:
+  node --import tsx/esm --test src/tests/pagination.test.ts
+Output:
+  # tests 9
+  # pass 9
+  # fail 0
+
+Command:
+  node --import tsx/esm --test src/tests/content.test.ts
+Output:
+  # tests 13
+  # pass 13
+  # fail 0
+
+Command:
+  node --import tsx/esm --test src/tests/databaseSchema.test.ts
+Output:
+  # tests 21
+  # pass 21
+  # fail 0
+
+Command (smoke tanpa Postgres, skrip sementara smoke-p3.ts lalu dihapus):
+  node --import tsx/esm smoke-p3.ts
+Output:
+  [HTTP] GET http://localhost/api/v1/products?cursor=zzz - 400 (8ms)
+  [HTTP] GET http://localhost/api/v1/admin/banners/analytics - 401 (1ms)
+  [HTTP] POST http://localhost/api/v1/banners/00000000-0000-0000-0000-000000000000/events - 500 (35ms)
+  [HTTP] GET http://localhost/health - 200 (39ms)
+  [HTTP] GET http://localhost/health - 304 (38ms)
+  [HTTP] GET http://localhost/health - 200 (37ms)
+  [HTTP] GET http://localhost/api/v1/products?limit=5&fields=id,title - 500 (146ms)
+  - GET /products?cursor=zzz: 400 {"success":false,"error":{"code":"INVALID_CURSOR","message":"Cursor tidak valid"}}
+  - GET /admin/banners/analytics (no token): 401
+  - POST /banners/:id/events (no db): 500
+  - GET /health: 200 etag=yes body=168b
+  - GET /health with If-None-Match: 304
+  - GET /health with gzip: 200 content-encoding=gzip
+  - GET /products (db down): 500
+  (500 pada banner event dan products berasal dari kredensial Postgres lokal yang salah,
+   bukan 404, jadi route benar-benar ter-mount dan mencapai handler.)
+
+Command (cek em dash pada file baru):
+  foreach file: hitung [char]0x2014
+Output:
+  drizzle/0013_banner_events.sql emdash=0
+  drizzle/0014_pagination_indexes.sql emdash=0
+  loadtest/k6-smoke.js emdash=0
+  loadtest/README.md emdash=0
+  src/tests/pagination.test.ts emdash=0
+  src/utils/pagination.ts emdash=0
+
+Command (hitung checkbox TASK-CHECKLIST.md):
+Output:
+  x=149 p=5 n=34 total=188
+  Sebelum blok ini: x=147 p=6 n=35.
+  Em dash di TASK-CHECKLIST.md tetap 83, tidak ada em dash baru.
+
+Keputusan status:
+  [x] Optimasi API untuk mobile
+      Kontrak cursor murni di src/utils/pagination.ts, dipakai products dan orders, ETag
+      hanya pada rute baca anonim, kompresi global, fields untuk proyeksi kolom, tiga indeks
+      pendukung plus migrasi idempoten.
+  [x] Banner analytics (CMS-004) dan targeting (CMS-003)
+      Segmen all/guest/customer, banner_events append-only, CTR per banner dengan rentang
+      tanggal, semua banner muncul termasuk yang nol event.
+  [~] Load test
+      Skrip dan ambang ada, belum pernah dijalankan. Baris tetap [~] sampai ada hasil p95 nyata
+      beserta spesifikasi host.
+
+Catatan:
+  - Postgres lokal masih menolak login (password authentication failed for user "postgres"),
+    jadi tidak ada smoke 200 yang bergantung data. Yang dibuktikan hanya status kode, header,
+    dan mounting route.
+  - drizzle/meta/_journal.json masih hanya memuat 0000 dan 0006, sehingga 0007 sampai 0014
+    belum terjurnal. Jalur de facto tetap db:push, dan migrasi baru ditulis idempoten supaya
+    aman dijalankan manual.
+  - k6 belum dijalankan karena butuh Postgres dan Redis hidup plus host klien terpisah.

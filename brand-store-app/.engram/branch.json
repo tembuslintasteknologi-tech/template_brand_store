@@ -5,12 +5,12 @@
   "upstream": null,
   "mergeBase": null,
   "firstSeenHead": "c81d98781a76eccfcba75d3a15e1fca97c858a92",
-  "lastSeenHead": "0fadc197920a652389ec0f529641239c5b513e07",
-  "lastAnalyzedHead": "0fadc197920a652389ec0f529641239c5b513e07",
+  "lastSeenHead": "f6a8c83aaaba538b17860dc1a3b8412341b2d053",
+  "lastAnalyzedHead": "f6a8c83aaaba538b17860dc1a3b8412341b2d053",
   "stale": false,
   "staleReason": null,
   "staleSince": null,
   "lifecycleEvent": null,
   "createdAt": "2026-11-10T10:05:41.971Z",
-  "updatedAt": "2026-11-17T12:22:19.061Z"
+  "updatedAt": "2026-11-17T14:03:48.493Z"
 }

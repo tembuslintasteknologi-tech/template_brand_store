@@ -1801,3 +1801,137 @@ Catatan:
     cakupan backend, jadi tidak diklaim selesai.
   - Postgres lokal masih menolak login, jadi tidak ada smoke berbasis data untuk blok ini.
     Bukti yang ada adalah tsc dan unit test.
+
+### 2026-11-17 (lanjutan 19) - Phase 4: AUT-013 granular permission, verifikasi INV-007/008 dan AGG-001..004
+
+Cakupan blok ini: menulis ulang modul permission admin (AUT-013), lalu memverifikasi tiga baris
+Phase 4 yang kodenya sudah ada tetapi belum pernah dicatat sebagai selesai
+(multi-warehouse inventory dan aggregator logistik multi-provider).
+
+Command:
+```powershell
+cd brand-store-app
+npx tsc --noEmit; "tsc exit: $LASTEXITCODE"
+```
+Output:
+```
+tsc exit: 0
+```
+
+Command (suite permission baru):
+```powershell
+cd brand-store-app
+node --import tsx/esm --test src/tests/adminPermissions.test.ts 2>&1 | Select-String -Pattern "^not ok|^# (tests|suites|pass|fail|cancelled|skipped|todo)"
+```
+Output:
+```
+# tests 27
+# suites 6
+# pass 27
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
+Command (seluruh suite):
+```powershell
+cd brand-store-app
+npm test 2>&1 | Select-String -Pattern "^not ok|^# (tests|suites|pass|fail|cancelled|skipped|todo)"
+```
+Output:
+```
+# tests 777
+# suites 57
+# pass 777
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+Baseline blok sebelumnya 750 test di 51 suite. Kenaikan 27 test berasal dari
+`adminPermissions.test.ts`. Angka 777 sama dengan hasil yang dipakai di `TASK-CHECKLIST.md`.
+
+Command (bukti INV-007 dan INV-008):
+```powershell
+cd brand-store-app
+node --import tsx/esm --test src/tests/branchStock.test.ts src/tests/stockTransfer.test.ts src/tests/branchAvailability.test.ts src/tests/branchReservation.test.ts 2>&1 | Select-String -Pattern "^not ok|^# (tests|suites|pass|fail)"
+```
+Output:
+```
+# tests 64
+# suites 7
+# pass 64
+# fail 0
+```
+
+Command (bukti AGG-001..004):
+```powershell
+cd brand-store-app
+node --import tsx/esm --test src/tests/logistics.test.ts src/tests/tembusLogistics.test.ts 2>&1 | Select-String -Pattern "^not ok|^# (tests|suites|pass|fail)"
+```
+Output:
+```
+# tests 22
+# suites 0
+# pass 22
+# fail 0
+```
+
+Command (cek em dash pada berkas yang diubah):
+```powershell
+cd brand-store-app
+$files = @('API-DOCS.md','VERIFY-LOG.md','..\TASK-CHECKLIST.md','..\README.md','src\services\auth\permissions.ts','src\services\auth\permissionRepository.ts','src\middleware\auth.ts','src\routes\admin.ts','src\tests\adminPermissions.test.ts')
+foreach ($f in $files) { $hits = (Select-String -Path $f -Pattern ([char]0x2014) -AllMatches | Measure-Object).Count; "$f : $hits em dash" }
+```
+Output:
+```
+API-DOCS.md : 0 em dash
+VERIFY-LOG.md : 0 em dash
+..\TASK-CHECKLIST.md : 79 em dash
+..\README.md : 0 em dash
+src\services\auth\permissions.ts : 0 em dash
+src\services\auth\permissionRepository.ts : 0 em dash
+src\middleware\auth.ts : 0 em dash
+src\routes\admin.ts : 0 em dash
+src\tests\adminPermissions.test.ts : 0 em dash
+```
+Catatan: 79 em dash di `TASK-CHECKLIST.md` adalah sisa gaya lama berkas itu, bukan dari baris
+Phase 4 yang baru ditulis. Baris baru memakai titik dua sebagai pemisah.
+
+Ringkasan keputusan:
+  - AUT-013 selesai. Katalog 23 scope, default role (`admin` semua, `branch_admin` subset
+    operasional, `customer` kosong), override `grant`/`revoke` per user di tabel
+    `admin_permission_grants` dengan unique index `(user_id, permission)`, resolver murni di
+    `src/services/auth/permissions.ts`, akses DB di `permissionRepository.ts`, dan guard
+    `requirePermission` di `src/middleware/auth.ts`.
+  - Guard membaca override per request, bukan dari JWT. Pencabutan scope berlaku pada request
+    berikutnya. Kalau tabel tidak bisa dibaca, guard membalas 503
+    `PERMISSION_CHECK_UNAVAILABLE` (fail closed).
+  - Endpoint baru: `GET /api/v1/admin/permissions`, `GET /api/v1/admin/users/:id/permissions`,
+    `PUT /api/v1/admin/users/:id/permissions`. Route admin lama sekarang dijaga `dashboard.view`,
+    `reports.export`, `users.view`, `users.manage`, `audit.view`, dan `permissions.manage`.
+  - Batas yang ditegakkan: tidak boleh mengubah scope akun sendiri, tidak boleh memberi scope yang
+    tidak dipegang, `permissions.manage` tidak pernah lewat override, target role `customer`
+    ditolak, admin terakhir tidak boleh kehilangan `permissions.manage`, setiap perubahan menulis
+    audit `user.permissions_update`.
+  - INV-007 dan INV-008 dinaikkan ke `[x]` karena kode dan test-nya sudah ada sebelumnya dan
+    diverifikasi ulang pada blok ini (64 test lulus).
+  - AGG-001..004 dinaikkan ke `[x]` dengan alasan yang sama (22 test lulus, termasuk failover dan
+    pemilihan termurah/tercepat).
+
+Catatan:
+  - `adminOnlyMiddleware` tetap membatasi seluruh grup `/api/v1/admin` ke role `admin`, jadi
+    `branch_admin` belum bisa masuk walaupun punya scope. AUT-013 mempersempit admin terhadap
+    admin, bukan membuka grup untuk staf cabang.
+  - Tabel `admin_permission_grants` baru punya file `drizzle/0016_admin_permissions.sql` dan belum
+    masuk `drizzle/meta/_journal.json`. Jalur de facto tetap `npm run db:push`, sama seperti
+    migrasi 0007 sampai 0015.
+  - Token mock (`mock-admin-token`, `mock-branch-admin-token-*`) memakai id non-UUID sehingga
+    `loadPermissionOverrides` mengembalikan daftar kosong tanpa query DB. Test rute memakai jalur
+    itu, jadi test tidak butuh Postgres.
+  - Postgres lokal masih menolak login. Bukti blok ini adalah tsc dan unit test, bukan smoke
+    berbasis data.
+  - Item Phase 4 yang butuh kredensial atau keputusan bisnis (Stripe/DOKU/BNPL, rekomendasi AI,
+    email marketing dan scheduled report, angka pricing engine) dicatat di `TASK-CHECKLIST.md`
+    bagian D, tidak diklaim selesai.

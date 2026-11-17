@@ -2,18 +2,35 @@ import { Hono } from 'hono';
 import { db } from '../db/index.js';
 import { orders, products, users } from '../db/schema.js';
 import { desc, eq } from 'drizzle-orm';
-import { authMiddleware, adminOnlyMiddleware } from '../middleware/auth.js';
+import { authMiddleware, adminOnlyMiddleware, requirePermission } from '../middleware/auth.js';
 import { buildChartSeries } from '../services/admin/dashboard.js';
 import { buildAdminAlerts } from '../services/admin/alerts.js';
 import { buildExport, unsupportedFormatError, ExportColumn, ExportFormat, ExportType } from '../services/admin/reports.js';
 import { listAdminActions, recordAdminAction } from '../services/admin/auditLog.js';
 import {
   AdminUserError,
+  countAdmins,
   getCustomerDetail,
   listCustomers,
   setCustomerStatus,
   setUserRole,
 } from '../services/admin/users.js';
+import {
+  ADMIN_PERMISSIONS,
+  PERMISSION_DESCRIPTIONS,
+  ROLE_PERMISSION_DEFAULTS,
+  PermissionError,
+  canGrant,
+  diffPermissions,
+  effectivePermissions,
+  hasPermission,
+  normalizeOverrides,
+} from '../services/auth/permissions.js';
+import {
+  getAdminPermissionState,
+  loadPermissionOverrides,
+  replaceUserOverrides,
+} from '../services/auth/permissionRepository.js';
 
 export const adminRoutes = new Hono();
 
@@ -24,7 +41,7 @@ function actorOf(c: any): { id: string; role: string; email: string } {
 }
 
 // GET /api/v1/admin/dashboard/charts - daily revenue and order series (ADM-003)
-adminRoutes.get('/dashboard/charts', async (c) => {
+adminRoutes.get('/dashboard/charts', requirePermission('dashboard.view'), async (c) => {
   try {
     const days = Number(c.req.query('days') ?? 7);
     const series = await buildChartSeries(Number.isFinite(days) ? days : 7);
@@ -35,7 +52,7 @@ adminRoutes.get('/dashboard/charts', async (c) => {
 });
 
 // GET /api/v1/admin/alerts - operational alerts for the admin feed (NTF-008)
-adminRoutes.get('/alerts', async (c) => {
+adminRoutes.get('/alerts', requirePermission('dashboard.view'), async (c) => {
   try {
     const threshold = Number(c.req.query('lowStockThreshold') ?? 5);
     const alerts = await buildAdminAlerts({
@@ -50,7 +67,7 @@ adminRoutes.get('/alerts', async (c) => {
 });
 
 // GET /api/v1/admin/reports/export - CSV or JSON report download (ADM-004)
-adminRoutes.get('/reports/export', async (c) => {
+adminRoutes.get('/reports/export', requirePermission('reports.export'), async (c) => {
   const type = String(c.req.query('type') ?? 'orders') as ExportType;
   const format = String(c.req.query('format') ?? 'csv') as ExportFormat;
 
@@ -157,7 +174,7 @@ adminRoutes.get('/reports/export', async (c) => {
 });
 
 // GET /api/v1/admin/customers - customer list (USM-001)
-adminRoutes.get('/customers', async (c) => {
+adminRoutes.get('/customers', requirePermission('users.view'), async (c) => {
   try {
     const limit = Number(c.req.query('limit') ?? 20);
     const offset = Number(c.req.query('offset') ?? 0);
@@ -173,7 +190,7 @@ adminRoutes.get('/customers', async (c) => {
 });
 
 // GET /api/v1/admin/customers/:id - customer detail (USM-002)
-adminRoutes.get('/customers/:id', async (c) => {
+adminRoutes.get('/customers/:id', requirePermission('users.view'), async (c) => {
   try {
     const data = await getCustomerDetail(c.req.param('id') as string);
     return c.json({ success: true, data });
@@ -184,7 +201,7 @@ adminRoutes.get('/customers/:id', async (c) => {
 });
 
 // POST /api/v1/admin/customers/:id/status - activate or suspend (USM-003)
-adminRoutes.post('/customers/:id/status', async (c) => {
+adminRoutes.post('/customers/:id/status', requirePermission('users.manage'), async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const status = String(body?.status ?? '');
   try {
@@ -197,7 +214,7 @@ adminRoutes.post('/customers/:id/status', async (c) => {
 });
 
 // POST /api/v1/admin/users/:id/role - promote or demote admin (USM-004)
-adminRoutes.post('/users/:id/role', async (c) => {
+adminRoutes.post('/users/:id/role', requirePermission('users.manage'), async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const role = String(body?.role ?? '');
   try {
@@ -209,8 +226,140 @@ adminRoutes.post('/users/:id/role', async (c) => {
   }
 });
 
+// GET /api/v1/admin/permissions - catalog plus the caller's effective scopes (AUT-013)
+adminRoutes.get('/permissions', async (c) => {
+  try {
+    const actor = actorOf(c);
+    const overrides = await loadPermissionOverrides(actor.id);
+    return c.json({
+      success: true,
+      data: {
+        catalog: ADMIN_PERMISSIONS.map((permission) => ({
+          permission,
+          description: PERMISSION_DESCRIPTIONS[permission],
+        })),
+        roles: ROLE_PERMISSION_DEFAULTS,
+        me: {
+          role: actor.role,
+          overrides,
+          effective: effectivePermissions(actor.role, overrides),
+        },
+      },
+    });
+  } catch (err: any) {
+    return c.json({ success: false, error: err.message }, 500);
+  }
+});
+
+// GET /api/v1/admin/users/:id/permissions - scopes for one admin or staff account (AUT-013)
+adminRoutes.get('/users/:id/permissions', async (c) => {
+  const actor = actorOf(c);
+  const targetId = c.req.param('id') as string;
+
+  try {
+    if (targetId !== actor.id) {
+      const actorOverrides = await loadPermissionOverrides(actor.id);
+      if (!hasPermission(actor.role, actorOverrides, 'permissions.manage')) {
+        return c.json(
+          {
+            success: false,
+            error: { code: 'PERMISSION_DENIED', message: 'Forbidden: scope permissions.manage required' },
+          },
+          403
+        );
+      }
+    }
+
+    const state = await getAdminPermissionState(targetId);
+    return c.json({ success: true, data: state });
+  } catch (err: any) {
+    const status = err instanceof PermissionError ? err.status : 500;
+    return c.json({ success: false, error: err.message }, status as any);
+  }
+});
+
+// PUT /api/v1/admin/users/:id/permissions - replace the override list for one account (AUT-013)
+adminRoutes.put('/users/:id/permissions', requirePermission('permissions.manage'), async (c) => {
+  const actor = actorOf(c);
+  const targetId = c.req.param('id') as string;
+  const body = await c.req.json().catch(() => null);
+
+  if (!body || !Array.isArray(body.overrides)) {
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'overrides must be an array' } },
+      400
+    );
+  }
+
+  if (targetId === actor.id) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'SELF_PERMISSION_CHANGE',
+          message: 'Admin tidak boleh mengubah scope akunnya sendiri',
+        },
+      },
+      409
+    );
+  }
+
+  try {
+    const desired = normalizeOverrides(body.overrides);
+    const actorOverrides = await loadPermissionOverrides(actor.id);
+
+    for (const row of desired) {
+      if (row.effect !== 'grant') continue;
+      if (!canGrant(actor.role, actorOverrides, row.permission)) {
+        throw new PermissionError(
+          `Tidak boleh memberikan scope yang tidak dimiliki: ${row.permission}`,
+          'SCOPE_NOT_HELD',
+          403
+        );
+      }
+    }
+
+    const before = await getAdminPermissionState(targetId);
+    const nextEffective = effectivePermissions(before.role, desired);
+    const losesManageScope =
+      before.effective.includes('permissions.manage') && !nextEffective.includes('permissions.manage');
+
+    if (losesManageScope && before.role === 'admin') {
+      const admins = await countAdmins();
+      if (admins <= 1) {
+        throw new PermissionError(
+          'Admin terakhir harus tetap memegang permissions.manage',
+          'SCOPE_NOT_HELD',
+          409
+        );
+      }
+    }
+
+    const after = await replaceUserOverrides({
+      userId: targetId,
+      overrides: desired,
+      actorId: actor.id,
+    });
+    const diff = diffPermissions(before.effective, after.effective);
+
+    await recordAdminAction({
+      actorId: actor.id,
+      action: 'user.permissions_update',
+      targetType: 'user',
+      targetId,
+      metadata: { added: diff.added, removed: diff.removed },
+    });
+
+    return c.json({ success: true, data: { ...after, diff } });
+  } catch (err: any) {
+    const status = err instanceof PermissionError ? err.status : err instanceof AdminUserError ? err.status : 500;
+    const code = err instanceof PermissionError ? err.code : 'INTERNAL_ERROR';
+    return c.json({ success: false, error: { code, message: err.message } }, status as any);
+  }
+});
+
 // GET /api/v1/admin/logs - admin audit trail
-adminRoutes.get('/logs', async (c) => {
+adminRoutes.get('/logs', requirePermission('audit.view'), async (c) => {
   try {
     const limit = Number(c.req.query('limit') ?? 50);
     const action = c.req.query('action');

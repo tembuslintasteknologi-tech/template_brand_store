@@ -110,6 +110,10 @@ The server will start at `http://localhost:3000`.
   - `GET /api/v1/cart` - Keranjang persisten milik user
   - `POST /api/v1/cart/recover/:token` - Pulihkan cart dari link email
   - `POST /api/v1/admin/cart-recovery/scan` - [Admin] Jalankan scanner abandoned cart
+- **Granular admin permissions** (AUT-013):
+  - `GET /api/v1/admin/permissions` - [Admin] Katalog 23 scope plus scope efektif pemanggil
+  - `GET /api/v1/admin/users/:id/permissions` - [Admin] State scope satu akun
+  - `PUT /api/v1/admin/users/:id/permissions` - [Admin] Ganti daftar override scope akun
 - **Admin Analytics**:
   - `GET /api/v1/admin/dashboard` - Real-time KPI stats & recent orders
   - `GET /api/v1/admin/reports/sales` - Sales and financial reports

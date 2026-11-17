@@ -2,6 +2,8 @@ import { Context, Next } from 'hono';
 import { unifiedConfig } from '../config/unifiedConfig.js';
 import { ensureRedisConnected } from '../config/redis.js';
 import { resolveBranchAccess } from '../services/branch/branchScope.js';
+import { AdminPermission, effectivePermissions, hasPermission } from '../services/auth/permissions.js';
+import { loadPermissionOverrides } from '../services/auth/permissionRepository.js';
 import jwt from 'jsonwebtoken';
 
 export function signJwt(payload: object, expiresIn: string | number = unifiedConfig.jwt.expiresIn, secret: string = unifiedConfig.jwt.secret): string {
@@ -156,6 +158,54 @@ export async function adminOnlyMiddleware(c: Context, next: Next) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Forbidden: Admin access required' } }, 403);
   }
   return await next();
+}
+
+/**
+ * Granular admin scope guard (AUT-013). Runs after `authMiddleware`, and after
+ * `adminOnlyMiddleware` where the route is still pusat-only.
+ *
+ * Overrides are read per request so a revoked scope takes effect on the next call instead of
+ * waiting for the access token to expire. The resolved permission list is stored on the
+ * context so a handler can explain what the actor may do without a second query.
+ */
+export function requirePermission(permission: AdminPermission) {
+  return async function (c: Context, next: Next) {
+    const user = c.get('user');
+    if (!user) {
+      return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, 401);
+    }
+
+    let overrides;
+    try {
+      overrides = await loadPermissionOverrides(user.id);
+    } catch (err: any) {
+      // Fail closed: a database blip must not silently restore a scope that was revoked.
+      return c.json(
+        {
+          success: false,
+          error: { code: 'PERMISSION_CHECK_UNAVAILABLE', message: 'Permission check unavailable' },
+        },
+        503
+      );
+    }
+
+    if (!hasPermission(user.role, overrides, permission)) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'PERMISSION_DENIED',
+            message: `Forbidden: scope ${permission} required`,
+            permission,
+          },
+        },
+        403
+      );
+    }
+
+    c.set('permissions', effectivePermissions(user.role, overrides));
+    return await next();
+  };
 }
 
 

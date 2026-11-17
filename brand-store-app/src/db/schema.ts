@@ -908,3 +908,26 @@ export const adminTotp = pgTable('admin_totp', {
 }, (table) => ({
   userUidx: uniqueIndex('admin_totp_user_uidx').on(table.userId),
 }));
+
+// ---------------------------------------------------------------------------
+// GRANULAR ADMIN PERMISSIONS (AUT-013)
+// ---------------------------------------------------------------------------
+//
+// Satu baris per permission per user. `effect` membedakan penambahan scope dari pencabutan
+// scope bawaan role, jadi role tetap menjadi batas atas sementara admin pusat bisa
+// mempersempit atau memperluas akun staf tanpa mengubah role-nya.
+export const adminPermissionGrants = pgTable('admin_permission_grants', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  permission: varchar('permission', { length: 64 }).notNull(),
+  effect: varchar('effect', { length: 10 }).notNull().default('grant'), // 'grant' | 'revoke'
+  grantedBy: uuid('granted_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  userPermissionUidx: uniqueIndex('admin_permission_grants_user_permission_uidx').on(
+    table.userId,
+    table.permission
+  ),
+  userIdx: index('admin_permission_grants_user_idx').on(table.userId),
+}));

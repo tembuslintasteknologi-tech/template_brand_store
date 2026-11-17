@@ -604,3 +604,84 @@ order memang sudah lunas.
   memakainya.
 - Belum ada transfer saldo antar akun, dan tidak direncanakan tanpa keputusan bisnis eksplisit.
 
+## Granular Admin Permission Scopes (AUT-013)
+
+Modul ini mempersempit admin pusat satu terhadap admin pusat lain. Grup route `/api/v1/admin`
+tetap dijaga `adminOnlyMiddleware`, jadi `branch_admin` belum bisa masuk ke grup itu. Yang berubah
+adalah: setiap akun admin punya daftar scope sendiri, dan daftar itu dibaca ulang di setiap request,
+bukan diambil dari klaim JWT.
+
+Role tetap menjadi batas atas, override hanya menyempitkan atau memperluas di dalam batas itu:
+
+- `admin`: seluruh 23 scope.
+- `branch_admin`: subset operasional (dashboard, katalog baca, stok, pesanan, ulasan, live chat).
+- `customer`: kosong.
+
+Override disimpan di tabel `admin_permission_grants`, satu baris per permission per user dengan
+unique index `(user_id, permission)` dan kolom `effect` bernilai `grant` atau `revoke`. Perubahan
+langsung berlaku pada request berikutnya karena guard membaca tabel, bukan token.
+
+`permissions.manage` hanya berasal dari role default `admin` dan tidak pernah bisa diberikan lewat
+override `grant`. Alasannya sederhana: akun dengan scope terbatas tidak boleh mencetak akun lain
+yang bisa mengatur scope, karena itu sama dengan menaikkan diri sendiri.
+
+### Endpoint
+
+- `GET /api/v1/admin/permissions`: katalog 23 scope beserta deskripsi, default per role, dan scope
+  efektif pemanggil (`me.role`, `me.overrides`, `me.effective`). Dipakai halaman pengaturan admin
+  untuk merender checkbox tanpa menebak daftar scope.
+- `GET /api/v1/admin/users/{id}/permissions`: state satu akun (`userId`, `email`, `role`,
+  `overrides`, `effective`). Pemanggil boleh membaca dirinya sendiri tanpa `permissions.manage`,
+  membaca akun lain butuh `permissions.manage`.
+- `PUT /api/v1/admin/users/{id}/permissions`: body `{ "overrides": [{ "permission": "finance.view",
+  "effect": "grant" }] }`. Daftar yang dikirim adalah daftar final, bukan tambahan, jadi baris yang
+  tidak disebut akan hilang. Respons memuat state baru plus `diff { added, removed, unchanged }`.
+
+Aturan yang ditegakkan pada `PUT`:
+
+1. Hanya pemegang `permissions.manage` yang boleh memanggil.
+2. Akun tidak boleh mengubah scope miliknya sendiri (`409 SELF_PERMISSION_CHANGE`).
+3. Actor hanya boleh memberikan scope yang ia pegang sendiri (`403 SCOPE_NOT_HELD`).
+4. Target role `customer` ditolak karena tidak punya scope admin (`409 SCOPE_NOT_HELD`).
+5. Admin terakhir tidak boleh kehilangan `permissions.manage` (`409 SCOPE_NOT_HELD`).
+6. Setiap perubahan menulis satu baris audit `user.permissions_update` berisi scope yang ditambah
+   dan dicabut.
+
+### Route admin yang memakai guard scope
+
+| Route | Scope |
+| --- | --- |
+| `GET /dashboard/charts`, `GET /alerts` | `dashboard.view` |
+| `GET /reports/export` | `reports.export` |
+| `GET /customers`, `GET /customers/{id}` | `users.view` |
+| `POST /customers/{id}/status`, `POST /users/{id}/role` | `users.manage` |
+| `GET /logs` | `audit.view` |
+| `PUT /users/{id}/permissions` | `permissions.manage` |
+
+Kalau pembacaan override gagal karena database bermasalah, guard membalas
+`503 PERMISSION_CHECK_UNAVAILABLE`. Ini fail closed: gangguan database tidak boleh diam-diam
+mengembalikan scope yang sudah dicabut.
+
+### Tabel error
+
+| Kode | HTTP | Arti |
+| --- | --- | --- |
+| `UNKNOWN_PERMISSION` | 400 | Nama scope tidak ada di katalog |
+| `INVALID_EFFECT` | 400 | `effect` bukan `grant` atau `revoke` |
+| `PERMISSION_DENIED` | 403 | Pemanggil tidak memegang scope yang dibutuhkan |
+| `SCOPE_NOT_HELD` | 403 / 409 | Actor memberi scope yang tidak ia pegang, target customer, atau admin terakhir kehilangan pengelola scope |
+| `SELF_PERMISSION_CHANGE` | 409 | Akun mencoba mengubah scope dirinya sendiri |
+| `PERMISSION_CHECK_UNAVAILABLE` | 503 | Tabel override tidak bisa dibaca |
+
+### Keputusan yang masih terbuka
+
+- Halaman pengaturan admin di frontend belum dibuat. Backend hanya menyediakan katalog dan state.
+- `branch_admin` belum bisa masuk grup `/api/v1/admin`, jadi scope `branch_admin` baru terpakai
+  kalau grup route itu dibuka untuk role tersebut. Saat ini guard hanya membedakan admin satu
+  terhadap admin lain.
+- Route di luar grup admin (katalog, pesanan, promo, keuangan) belum dipasangi `requirePermission`.
+  Scope-nya sudah ada di katalog, tetapi penegakan menyusul per modul supaya tidak ada route yang
+  tiba-tiba menolak admin lama tanpa perubahan terpisah.
+- Tabel `admin_permission_grants` baru punya file SQL `drizzle/0016_admin_permissions.sql` dan belum
+  masuk `drizzle/meta/_journal.json`. Jalur de facto tetap `npm run db:push`.
+

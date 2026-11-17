@@ -256,13 +256,13 @@ Kabar baiknya, sisi logistik sudah siap: `logisticProvider.ts` menerima `origin.
 
 ## Phase 4: Enterprise
 
-- [ ] Multi-warehouse inventory (INV-007, INV-008)
+- [x] Multi-warehouse inventory (INV-007, INV-008): stok per cabang, reservasi terpisah per cabang, dan transfer stok antar cabang dengan alur draft/approve/ship/receive/cancel. Bukti: `branchStock.test.ts`, `stockTransfer.test.ts`, `branchAvailability.test.ts`, `branchReservation.test.ts`, 64 test lulus.
 - [ ] Pricing engine lanjutan: dynamic, tiered, customer group (PRC-002..004)
-- [ ] Aggregator logistik multi-provider + rate comparison + failover (AGG-001..004)
+- [x] Aggregator logistik multi-provider + rate comparison + failover (AGG-001..004): registry provider pluggable, `compareRates` lintas provider urut biaya, `pickCheapest`/`pickFastest`, dan failover saat satu provider gagal. Bukti: `logistics.test.ts` dan `tembusLogistics.test.ts`, 22 test lulus.
 - [ ] Adapter Stripe / DOKU / BNPL
 - [ ] Rekomendasi produk AI
 - [ ] Marketing automation + email campaign
-- [ ] Granular admin permission scopes (AUT-013)
+- [x] Granular admin permission scopes (AUT-013): katalog 23 scope, default per role, override grant/revoke per user di `admin_permission_grants`, guard `requirePermission` membaca override tiap request, plus endpoint catalog/state/update. Bukti: `adminPermissions.test.ts`, 27 test lulus.
 - [ ] Scheduled email report (ADM-005)
 - [ ] A/B testing banner (CMS-005)
 
@@ -309,11 +309,11 @@ Dihitung dari 192 item checkbox di dokumen ini (recount 2026-11-17; baris RTC-00
 
 | Status | Jumlah | Arti |
 |---|---|---|
-| `[x]` DONE | 156 | kode dipakai + lulus unit test / bukti perintah |
+| `[x]` DONE | 159 | kode dipakai + lulus unit test / bukti perintah |
 | `[~]` PARTIAL | 5 | sebagian sub-item sudah ada |
-| `[ ]` BELUM | 31 | belum dikerjakan |
+| `[ ]` BELUM | 28 | belum dikerjakan |
 
-Progres nyata: Phase 0, Phase 1, Phase 2, dan Fase 2.5 selesai penuh. Phase 3 sudah menutup dua sub-baris realtime terakhir (indikator mengetik dan status online agen) di samping baris penuh sebelumnya (flash sale, loyalty, referral, wallet, optimasi API mobile, banner analytics dan targeting, live chat, abandoned cart recovery, 2FA TOTP admin), dengan tiga baris partial (analytics keuangan, moderasi manual, load test). Sisa pekerjaan terbesar ada di Phase 4. Baris partial dan kosong sudah memuat aksi manusia yang diperlukan supaya bisa dikerjakan tanpa menebak.
+Progres nyata: Phase 0, Phase 1, Phase 2, dan Fase 2.5 selesai penuh. Phase 3 sudah menutup dua sub-baris realtime terakhir (indikator mengetik dan status online agen) di samping baris penuh sebelumnya (flash sale, loyalty, referral, wallet, optimasi API mobile, banner analytics dan targeting, live chat, abandoned cart recovery, 2FA TOTP admin), dengan tiga baris partial (analytics keuangan, moderasi manual, load test). Phase 4 sudah menutup tiga baris: multi-warehouse inventory (INV-007, INV-008), aggregator logistik multi-provider (AGG-001..004), dan granular admin permission scopes (AUT-013). Sisa pekerjaan terbesar ada di Phase 4 (pricing engine lanjutan, adapter pembayaran dan BNPL, rekomendasi AI, marketing automation, scheduled report, A/B banner). Baris partial dan kosong sudah memuat aksi manusia yang diperlukan supaya bisa dikerjakan tanpa menebak.
 
 ### Bukti perintah terakhir
 
@@ -333,9 +333,9 @@ You are linting "src/**/*.ts", but all of the files matching the glob pattern "s
 [lint exit: 2]   <-- gate lint belum berfungsi, lihat catatan item ESLint di atas
 
 $ cd brand-store-app && npm test
-# tests 750
-# suites 51
-# pass 750
+# tests 777
+# suites 57
+# pass 777
 # fail 0
 # cancelled 0
 # skipped 0
@@ -374,6 +374,14 @@ Dicatat 2026-11-10. Item `[~]` yang butuh data, kredensial, atau keputusan manus
 **C. Blocker lingkungan**
 
 Butuh password atau URL `DATABASE_URL` yang benar untuk PostgreSQL lokal. Semua bukti DB sejak 2026-11-10 memakai cluster sementara port 55432 karena `.env` masih ditolak. Detail ada di bagian Blocker lingkungan di bawah.
+
+**D. Phase 4 yang butuh kredensial atau keputusan bisnis (dicatat 2026-11-17)**
+
+1. Adapter Stripe / DOKU / BNPL: butuh kunci sandbox, metode pembayaran yang diaktifkan, dan spesifikasi BNPL (provider, tenor, skema biaya).
+2. Rekomendasi produk AI: butuh provider model, kunci API, dan definisi sinyal rekomendasi (riwayat order, klik, stok).
+3. Marketing automation, email campaign, dan scheduled email report (ADM-005): butuh penyedia email beserta kunci API atau SMTP, alamat pengirim terverifikasi, dan jadwal kirim.
+4. Pricing engine lanjutan (PRC-002..004): logika bisa dibangun, tetapi angka dan kebijakan tetap milik brand (zona waktu dynamic pricing, batas tier wholesale, definisi customer group).
+5. A/B testing banner (CMS-005): tidak butuh kredensial, hanya keputusan metrik pemenang (klik atau konversi order).
 
 ### Blocker lingkungan
 

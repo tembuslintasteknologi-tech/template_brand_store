@@ -1593,3 +1593,100 @@ Catatan:
     belum terjurnal. Jalur de facto tetap db:push, dan migrasi baru ditulis idempoten supaya
     aman dijalankan manual.
   - k6 belum dijalankan karena butuh Postgres dan Redis hidup plus host klien terpisah.
+
+---
+
+### 2026-11-17 (lanjutan 17) - live chat, abandoned cart, 2FA TOTP, dan penyeragaman entrypoint
+
+Command:
+```powershell
+cd brand-store-app
+npx tsc --noEmit; "tsc exit: $LASTEXITCODE"
+```
+Output:
+```
+tsc exit: 0
+```
+
+Command:
+```powershell
+cd brand-store-app
+npm test 2>&1 | Select-String -Pattern "^not ok|^# (tests|suites|pass|fail|cancelled|skipped|todo)"
+```
+Output:
+```
+# tests 732
+# suites 51
+# pass 732
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+Baseline blok sebelumnya adalah 676 test di 51 suite. Kenaikan 56 test berasal dari
+src/tests/entrypoint.test.ts dan suite chat, cart recovery, serta TOTP.
+
+Command (cek em dash pada file yang disentuh):
+```powershell
+$files = @('src/index.ts','src/app.ts','src/routes/chat.ts','src/routes/cart.ts','src/routes/auth.ts','src/routes/orders.ts','src/routes/logistics.ts','src/routes/checkout.ts','src/services/auth/totp.ts','src/services/auth/secretBox.ts','src/services/auth/totpService.ts','src/services/chat/chatHours.ts','src/services/chat/chatService.ts','src/services/cart/cartRecoveryService.ts','src/services/cart/cartPersistence.ts','src/services/realtime/realtimeService.ts','src/db/schema.ts','drizzle/0015_chat_cart_recovery_2fa.sql','src/tests/entrypoint.test.ts')
+foreach ($f in $files) { $t = Get-Content $f -Raw; "$f emdash=" + ([regex]::Matches($t, [char]0x2014)).Count }
+```
+Output:
+```
+src/index.ts emdash=0
+src/app.ts emdash=0
+src/routes/chat.ts emdash=0
+src/routes/cart.ts emdash=0
+src/routes/auth.ts emdash=0
+src/routes/orders.ts emdash=0
+src/routes/logistics.ts emdash=0
+src/routes/checkout.ts emdash=0
+src/services/auth/totp.ts emdash=0
+src/services/auth/secretBox.ts emdash=0
+src/services/auth/totpService.ts emdash=0
+src/services/chat/chatHours.ts emdash=0
+src/services/chat/chatService.ts emdash=0
+src/services/cart/cartRecoveryService.ts emdash=0
+src/services/cart/cartPersistence.ts emdash=0
+src/services/realtime/realtimeService.ts emdash=0
+src/db/schema.ts emdash=0
+drizzle/0015_chat_cart_recovery_2fa.sql emdash=0
+src/tests/entrypoint.test.ts emdash=0
+```
+
+Command (hitung checkbox TASK-CHECKLIST.md):
+Output:
+```
+x=154 p=5 n=33 total=192
+Sebelum blok ini: x=149 p=5 n=34 total=188.
+Em dash di TASK-CHECKLIST.md turun dari 83 menjadi 82 karena dua baris realtime yang
+ditulis ulang di blok ini tidak lagi memakai em dash.
+```
+
+Keputusan status:
+  [x] Live chat customer ke admin (RTC-003)
+      SSE satu arah plus REST POST untuk mengirim, satu stream per user, routing cabang
+      disimpan sekali saat percakapan dibuat dengan urutan explicit_branch, product_stock,
+      default_branch, fallback_pusat, unrouted. Jam operasional bisa dioverride per cabang.
+  [x] Abandoned cart recovery (CRT-009)
+      Cart persisten di database, terpisah dari cartService memori yang lama. Token 24 byte
+      sekali pakai, policy default 60 menit idle, maksimal 2 pengingat, TTL 72 jam, dan
+      checkout menandai cart converted. Scanner berkala opsional lewat env.
+  [x] Admin 2FA TOTP (AUT-012)
+      TOTP RFC 6238 dengan toleransi satu langkah, secret AES-256-GCM, sepuluh recovery code
+      berhash dan sekali pakai, challenge token 300 detik, login dua langkah hanya untuk
+      admin dan branch_admin yang sudah mengaktifkan 2FA.
+  [ ] Indikator mengetik (RTC-004) dan status online agen (RTC-006)
+      Tetap kosong. Keduanya butuh keputusan produk, bukan hanya kode.
+
+Catatan:
+  - src/index.ts sebelumnya membangun Hono sendiri dengan prefix /api, sehingga chat, cart,
+    2FA, dan mayoritas route Phase 2/3 hanya hidup di dalam test. Sekarang src/index.ts hanya
+    mengekspor app dari src/app.ts, dan src/tests/entrypoint.test.ts mengunci perilaku itu.
+  - broadcastOrderStatus sebelumnya tidak dipanggil dari mana pun. Sekarang dipanggil dari
+    tiga jalur mutasi nyata, jadi klien tracking akhirnya menerima event.
+  - Postgres lokal masih menolak login (password authentication failed for user "postgres"),
+    jadi tidak ada smoke berbasis data. Bukti yang ada adalah tsc, unit test, dan pembacaan
+    jalur kode.
+  - drizzle/meta/_journal.json masih hanya memuat 0000 dan 0006, sehingga 0007 sampai 0015
+    belum terjurnal. Migrasi baru ditulis idempoten supaya aman dijalankan manual.

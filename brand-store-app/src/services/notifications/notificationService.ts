@@ -55,12 +55,21 @@ export const DEFAULT_TEMPLATES = [
     body: 'Pembayaran pesanan {{orderNumber}} gagal atau kedaluwarsa. Silakan coba lagi.',
     deepLinkPattern: '/orders/{{orderNumber}}/payment',
   },
+  {
+    code: 'cart.recovery',
+    channel: 'both',
+    category: 'cart',
+    subject: 'Keranjang Anda masih menunggu',
+    body: 'Ada {{itemCount}} barang senilai {{cartTotal}} di keranjang Anda. Lanjutkan checkout lewat link ini: {{recoveryLink}}',
+    deepLinkPattern: '/cart?recover={{recoveryToken}}',
+  },
 ];
 
 export const DEFAULT_PREFERENCES = [
   { category: 'order', inApp: true, email: true },
   { category: 'payment', inApp: true, email: true },
   { category: 'promo', inApp: true, email: false },
+  { category: 'cart', inApp: true, email: true },
 ];
 
 const PLACEHOLDER = /\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g;

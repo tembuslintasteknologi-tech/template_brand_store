@@ -18,6 +18,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { checkoutSchema } from '../validators/schemas.js';
 import { OrderSourceError } from '../services/branch/orderSourceService.js';
 import { createOrderWithItems } from '../services/order/orderCreateService.js';
+import { markCartConverted } from '../services/cart/cartPersistence.js';
 import { listShippingOptions, resolveSelectedShippingOption } from '../services/shipping/shippingOptionsService.js';
 
 export const checkoutRoutes = new Hono();
@@ -88,6 +89,15 @@ checkoutRoutes.post('/', authMiddleware, async (c) => {
       },
       enforceSingleBranch: true,
     });
+
+    // Cart persisten ditandai converted supaya scanner abandoned cart berhenti mengingatkan
+    // keranjang yang sudah dibayar. Kegagalan di sini tidak boleh membatalkan order yang sudah
+    // tercatat, jadi errornya ditelan dan hanya dicatat di log.
+    try {
+      await markCartConverted(user.id);
+    } catch (err: any) {
+      console.error('[checkout] markCartConverted failed', { userId: user.id, message: err?.message });
+    }
 
     return c.json(
       {

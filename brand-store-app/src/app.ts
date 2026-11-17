@@ -33,6 +33,9 @@ import { flashSaleAdminRoutes, flashSaleRoutes } from './routes/flashSales.js';
 import { loyaltyAdminRoutes, loyaltyRoutes } from './routes/loyalty.js';
 import { referralAdminRoutes, referralRoutes } from './routes/referral.js';
 import { walletAdminRoutes, walletRoutes } from './routes/wallet.js';
+import { chatAdminRoutes, chatRoutes } from './routes/chat.js';
+import { cartAdminRoutes, cartRoutes } from './routes/cart.js';
+import { realtimeRoutes } from './routes/realtime.js';
 import { pingDatabase } from './db/index.js';
 import { redisPing } from './config/redis.js';
 
@@ -163,6 +166,11 @@ export function createApp() {
   api.route('/admin', referralAdminRoutes);
   api.route('/wallet', walletRoutes);
   api.route('/admin', walletAdminRoutes);
+  api.route('/chat', chatRoutes);
+  api.route('/admin/chat', chatAdminRoutes);
+  api.route('/cart', cartRoutes);
+  api.route('/admin/cart-recovery', cartAdminRoutes);
+  api.route('/realtime', realtimeRoutes);
 
   app.route('/api/v1', api);
   app.route('/webhooks/logistics', logisticsWebhookRoutes);

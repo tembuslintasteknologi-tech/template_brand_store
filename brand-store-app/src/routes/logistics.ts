@@ -13,6 +13,7 @@ import { createShipmentForOrder, persistTracking, syncOrderFromShipment } from '
 import { FailureResolutionAction, resolveDeliveryFailure } from '../services/logistics/statusMap.js';
 import { OrderSourceError } from '../services/branch/orderSourceService.js';
 import { notifyOrderEvent } from '../services/notifications/orderNotifications.js';
+import { realtimeHub } from '../services/realtime/realtimeService.js';
 
 export const logisticsRoutes = new Hono();
 
@@ -346,6 +347,8 @@ logisticsRoutes.post('/admin/shipments/:awb/exception', authMiddleware, adminOnl
   if (resolution.orderStatus) {
     await db.update(orders).set({ status: resolution.orderStatus, updatedAt: now }).where(eq(orders.id, row.orderId));
     orderStatus = resolution.orderStatus;
+    // Pelanggan yang sedang membuka halaman tracking tidak perlu menunggu refresh manual.
+    realtimeHub.broadcastOrderStatus(row.orderId, orderStatus, row.awb ?? undefined);
   }
 
   return c.json({
@@ -415,6 +418,9 @@ logisticsWebhookRoutes.post('/:provider', async (c) => {
     .where(eq(shipments.id, row.id));
 
   const synced = await syncOrderFromShipment({ id: row.id, orderId: row.orderId, status: event.status });
+  if (synced) {
+    realtimeHub.broadcastOrderStatus(row.orderId, synced, event.awb);
+  }
   const [orderRow] = await db.select().from(orders).where(eq(orders.id, row.orderId)).limit(1);
   if (orderRow) {
     if (event.status === 'in_transit' || event.status === 'out_for_delivery') {

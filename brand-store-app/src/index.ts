@@ -1,54 +1,48 @@
-import { Hono } from 'hono';
-import { cors } from 'hono/cors';
+/**
+ * Entrypoint server.
+ *
+ * File ini sengaja hanya mengekspor `app` dari `app.ts`, bukan membangun Hono sendiri. Versi
+ * sebelumnya memasang ulang router dengan prefix `/api`, sehingga `npm run dev` dan `npm start`
+ * menjalankan subset route yang berbeda dari yang diuji dan dari yang dipakai klien mobile
+ * (`/api/v1`). Satu sumber pemasangan route berarti tidak ada lagi route yang "ada di test tapi
+ * hilang di produksi".
+ *
+ * Scheduler abandoned cart juga dipasang di sini, bukan di dalam route, karena route hanya
+ * memanggil satu putaran scan saat admin memintanya. Interval bersifat opsional: tanpa
+ * `CART_RECOVERY_INTERVAL_MINUTES` tidak ada timer yang berjalan.
+ */
+
 import { unifiedConfig } from './config/unifiedConfig.js';
-import { authRoutes } from './routes/auth.js';
-import { productRoutes } from './routes/products.js';
-import { orderRoutes } from './routes/orders.js';
-import { analyticsRoutes } from './routes/analytics.js';
-import { promoRoutes } from './routes/promos.js';
-import { paymentRoutes } from './routes/payments.js';
-import { notificationRoutes, notificationAdminRoutes } from './routes/notifications.js';
-import { realtimeRoutes } from './routes/realtime.js';
-import { securityHeadersMiddleware } from './middleware/security.js';
-
-const app = new Hono();
-
-// Global Middleware & Security Headers (Zero Trust / Hardening)
-app.use('*', cors({
-  origin: unifiedConfig.cors.origin,
-  allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization'],
-}));
-
-app.use('*', securityHeadersMiddleware());
-
-// Health check
-app.get('/health', (c) => c.json({ status: 'healthy', service: 'brand-store-api', timestamp: new Date().toISOString() }));
-
-// API Routes
-app.route('/api/auth', authRoutes);
-app.route('/api/products', productRoutes);
-app.route('/api/orders', orderRoutes);
-app.route('/api/admin', analyticsRoutes);
-app.route('/api/promos', promoRoutes);
-app.route('/api/payments', paymentRoutes);
-app.route('/api/notifications', notificationRoutes);
-app.route('/api/admin', notificationAdminRoutes);
-app.route('/api/realtime', realtimeRoutes);
-
-// 404 handler
-app.notFound((c) => c.json({ success: false, error: 'Endpoint not found' }, 404));
-
-// Error handler
-app.onError((err, c) => {
-  console.error('Unhandled error:', err);
-  return c.json({ success: false, error: 'Internal Server Error' }, 500);
-});
+import { app } from './app.js';
+import { runRecoveryScan } from './services/cart/cartPersistence.js';
+import { loadAbandonmentPolicy, loadRecoveryBaseUrl } from './routes/cart.js';
 
 export default {
   port: unifiedConfig.port,
   fetch: app.fetch,
 };
 
-console.log(`🚀 Brand Store API server running on port ${unifiedConfig.port}`);
+console.log(`Brand Store API server running on port ${unifiedConfig.port}`);
 
+const intervalMinutes = Number(process.env.CART_RECOVERY_INTERVAL_MINUTES ?? 0);
+
+if (Number.isFinite(intervalMinutes) && intervalMinutes > 0) {
+  const intervalMs = Math.max(60_000, intervalMinutes * 60_000);
+  const timer = setInterval(() => {
+    void (async () => {
+      try {
+        const policy = await loadAbandonmentPolicy();
+        if (!policy.enabled) return;
+        const baseUrl = await loadRecoveryBaseUrl();
+        const result = await runRecoveryScan(policy, { baseUrl });
+        console.log('[cart-recovery] scan', result);
+      } catch (err: any) {
+        console.error('[cart-recovery] scan failed', { message: err?.message });
+      }
+    })();
+  }, intervalMs);
+
+  // Timer tidak boleh menahan proses tetap hidup saat shutdown atau saat test mengimpor file ini.
+  if (typeof (timer as any).unref === 'function') (timer as any).unref();
+  console.log(`Cart recovery scanner aktif tiap ${intervalMs / 60_000} menit`);
+}

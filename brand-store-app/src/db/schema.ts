@@ -390,10 +390,21 @@ export const productImages = pgTable('product_images', {
 export const carts = pgTable('carts', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull().unique(),
+  // 'active' while the customer may still check out, 'abandoned' once the idle threshold passed,
+  // 'converted' when checkout consumed the cart. A converted cart never gets a reminder.
+  status: varchar('status', { length: 20 }).notNull().default('active'),
+  lastActivityAt: timestamp('last_activity_at').defaultNow().notNull(),
+  reminderSentAt: timestamp('reminder_sent_at'),
+  reminderCount: integer('reminder_count').notNull().default(0),
+  recoveryToken: varchar('recovery_token', { length: 64 }).unique(),
+  recoveredAt: timestamp('recovered_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
   userIdx: uniqueIndex('carts_user_idx').on(table.userId),
+  // Drives the abandonment scan: status plus idle time, id breaks ties on equal timestamps.
+  idleIdx: index('carts_idle_idx').on(table.status, table.lastActivityAt, table.id),
+  recoveryTokenIdx: index('carts_recovery_token_idx').on(table.recoveryToken),
 }));
 
 // ---------------------------------------------------------------------------
@@ -837,4 +848,63 @@ export const userDevices = pgTable('user_devices', {
 }, (table) => ({
   userIdx: index('user_devices_user_idx').on(table.userId),
   platformIdx: index('user_devices_platform_idx').on(table.platform),
+}));
+
+// ---------------------------------------------------------------------------
+// LIVE CHAT (customer ke admin/cabang)
+// ---------------------------------------------------------------------------
+//
+// Satu percakapan milik satu customer dan diarahkan ke satu cabang. `routingReason` menyimpan
+// kenapa cabang itu dipilih supaya pertanyaan "kenapa masuk ke cabang ini" bisa dijawab tanpa
+// menebak isi tabel stok saat itu.
+export const chatConversations = pgTable('chat_conversations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  branchId: uuid('branch_id').references(() => storeLocations.id, { onDelete: 'set null' }),
+  productId: uuid('product_id').references(() => products.id, { onDelete: 'set null' }),
+  subject: varchar('subject', { length: 200 }),
+  status: varchar('status', { length: 20 }).notNull().default('open'), // 'open' | 'assigned' | 'closed'
+  assignedTo: uuid('assigned_to').references(() => users.id, { onDelete: 'set null' }),
+  routingReason: varchar('routing_reason', { length: 40 }).notNull().default('manual'),
+  lastMessageAt: timestamp('last_message_at').defaultNow().notNull(),
+  closedAt: timestamp('closed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index('chat_conversations_user_idx').on(table.userId, table.lastMessageAt),
+  branchStatusIdx: index('chat_conversations_branch_status_idx').on(table.branchId, table.status, table.lastMessageAt),
+  statusIdx: index('chat_conversations_status_idx').on(table.status, table.lastMessageAt),
+}));
+
+export const chatMessages = pgTable('chat_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  conversationId: uuid('conversation_id').references(() => chatConversations.id, { onDelete: 'cascade' }).notNull(),
+  senderId: uuid('sender_id').references(() => users.id, { onDelete: 'set null' }),
+  senderRole: varchar('sender_role', { length: 20 }).notNull(), // 'customer' | 'branch_admin' | 'admin' | 'system'
+  body: text('body').notNull(),
+  readAt: timestamp('read_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  // Cursor order is (created_at DESC, id DESC) per conversation.
+  conversationIdx: index('chat_messages_conversation_idx').on(table.conversationId, table.createdAt, table.id),
+}));
+
+// ---------------------------------------------------------------------------
+// ADMIN TOTP (AUT-012)
+// ---------------------------------------------------------------------------
+//
+// `secretEncrypted` disimpan dalam bentuk AES-256-GCM, bukan base32 polos. Recovery codes
+// disimpan sebagai hash argon2 sehingga kebocoran tabel tidak langsung membuka akun.
+export const adminTotp = pgTable('admin_totp', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull().unique(),
+  secretEncrypted: text('secret_encrypted').notNull(),
+  enabled: boolean('enabled').notNull().default(false),
+  confirmedAt: timestamp('confirmed_at'),
+  lastUsedAt: timestamp('last_used_at'),
+  recoveryCodes: jsonb('recovery_codes').default([]),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  userUidx: uniqueIndex('admin_totp_user_uidx').on(table.userId),
 }));

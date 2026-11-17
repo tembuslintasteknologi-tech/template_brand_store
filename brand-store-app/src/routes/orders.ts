@@ -6,6 +6,7 @@ import { orderSchema } from '../validators/schemas.js';
 import { authMiddleware, adminOnlyMiddleware } from '../middleware/auth.js';
 import { OrderSourceError } from '../services/branch/orderSourceService.js';
 import { createOrderWithItems } from '../services/order/orderCreateService.js';
+import { realtimeHub } from '../services/realtime/realtimeService.js';
 import {
   PaginationError,
   buildCursorPage,
@@ -141,6 +142,8 @@ orderRoutes.patch('/admin/:id/status', authMiddleware, adminOnlyMiddleware, asyn
     if (!updated) {
       return c.json({ success: false, error: 'Order not found' }, 404);
     }
+
+    realtimeHub.broadcastOrderStatus(updated.id, status, shippingDetails?.trackingNumber ?? shippingDetails?.awb);
 
     return c.json({ success: true, data: updated });
   } catch (err: any) {

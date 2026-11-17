@@ -94,6 +94,35 @@ export const walletProgramSettingSchema = z.object({
   currency: z.string().min(1).max(10),
 });
 
+/**
+ * Jam operasional chat. Semua field opsional karena cabang boleh menimpa sebagian saja:
+ * misalnya hanya `days.sat` yang diubah dan sisanya ikut jadwal global. Normalisasi detail
+ * tetap dilakukan `normalizeChatSchedule`, validator ini hanya menolak bentuk yang jelas salah
+ * supaya admin tidak menyimpan JSON rusak yang membuat chat tutup sepanjang hari.
+ */
+export const chatHoursSettingSchema = z.object({
+  timezone: z.string().min(1).max(64).optional(),
+  alwaysOpen: z.boolean().optional(),
+  days: z
+    .record(
+      z.array(
+        z.object({
+          start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Format jam harus HH:MM'),
+          end: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Format jam harus HH:MM'),
+        })
+      )
+    )
+    .optional(),
+});
+
+export const cartAbandonmentSettingSchema = z.object({
+  enabled: z.boolean().optional(),
+  idleMinutes: z.number().int().min(5).max(20160).optional(),
+  maxReminders: z.number().int().min(0).max(10).optional(),
+  reminderCooldownMinutes: z.number().int().min(15).max(20160).optional(),
+  recoveryTtlHours: z.number().int().min(1).max(720).optional(),
+});
+
 export const settingValidators: Record<string, z.ZodTypeAny> = {
   'brand.name': z.object({ text: z.string().min(1).max(120) }),
   'brand.currency': z.object({ code: z.string().length(3) }),
@@ -108,6 +137,9 @@ export const settingValidators: Record<string, z.ZodTypeAny> = {
   'referral.program': referralProgramSettingSchema,
   'referral.baseUrl': z.object({ url: z.string().url() }),
   'wallet.program': walletProgramSettingSchema,
+  'chat.hours': chatHoursSettingSchema,
+  'cart.abandonment': cartAbandonmentSettingSchema,
+  'cart.recoveryBaseUrl': z.object({ url: z.string().url() }),
   feature_flags: featureFlagsSchema,
   'maintenance.mode': z.object({
     enabled: z.boolean(),

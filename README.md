@@ -81,21 +81,31 @@ The server will start at `http://localhost:3000`.
 
 - **Health Check**: `GET /health`
 - **Authentication**:
-  - `POST /api/auth/register` - Register a new customer
-  - `POST /api/auth/login` - Login user
+  - `POST /api/v1/auth/register` - Register a new customer
+  - `POST /api/v1/auth/login` - Login user
+  - `GET /api/v1/auth/2fa/status` - [Admin] Status TOTP admin
 - **Products**:
-  - `GET /api/products` - List / search products
-  - `POST /api/products` - [Admin] Create product
-  - `PUT /api/products/:id` - [Admin] Update product
-  - `DELETE /api/products/:id` - [Admin] Delete product
+  - `GET /api/v1/products` - List / search products
+  - `POST /api/v1/products` - [Admin] Create product
+  - `PUT /api/v1/products/:id` - [Admin] Update product
+  - `DELETE /api/v1/products/:id` - [Admin] Delete product
 - **Orders**:
-  - `POST /api/orders` - Checkout cart & create order
-  - `GET /api/orders/my-orders` - Customer order history
-  - `PUT /api/orders/:id/status` - [Admin] Update order status & shipping
+  - `POST /api/v1/orders` - Checkout cart & create order
+  - `GET /api/v1/orders/my-orders` - Customer order history
+  - `PATCH /api/v1/orders/admin/:id/status` - [Admin] Update order status & shipping
+  - `GET /api/v1/realtime/orders/:orderId/stream` - SSE status order real-time
 - **Promos**:
-  - `GET /api/promos` - List active promos
-  - `POST /api/promos` - [Admin] Create promo code
+  - `GET /api/v1/promos` - List active promos
+  - `POST /api/v1/promos` - [Admin] Create promo code
+- **Live chat**:
+  - `GET /api/v1/chat/hours` - Jam operasional chat
+  - `GET /api/v1/chat/stream` - SSE pesan untuk pelanggan
+  - `GET /api/v1/admin/chat/queue` - [Admin] Antrean percakapan
+- **Cart dan recovery**:
+  - `GET /api/v1/cart` - Keranjang persisten milik user
+  - `POST /api/v1/cart/recover/:token` - Pulihkan cart dari link email
+  - `POST /api/v1/admin/cart-recovery/scan` - [Admin] Jalankan scanner abandoned cart
 - **Admin Analytics**:
-  - `GET /api/admin/dashboard` - Real-time KPI stats & recent orders
-  - `GET /api/admin/reports/sales` - Sales and financial reports
-  - `GET /api/admin/reports/products` - Top selling products report
+  - `GET /api/v1/admin/dashboard` - Real-time KPI stats & recent orders
+  - `GET /api/v1/admin/reports/sales` - Sales and financial reports
+  - `GET /api/v1/admin/reports/products` - Top selling products report

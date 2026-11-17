@@ -100,7 +100,12 @@ The server will start at `http://localhost:3000`.
 - **Live chat**:
   - `GET /api/v1/chat/hours` - Jam operasional chat
   - `GET /api/v1/chat/stream` - SSE pesan untuk pelanggan
-  - `GET /api/v1/admin/chat/queue` - [Admin] Antrean percakapan
+  - `POST /api/v1/chat/conversations/:id/typing` - Indikator mengetik pelanggan (sesaat, tanpa simpan DB)
+  - `POST /api/v1/admin/chat/conversations/:id/typing` - Indikator mengetik agen ke pelanggan
+  - `POST /api/v1/admin/chat/heartbeat` - Denyut kehadiran agen, kirim tiap 30 detik
+  - `GET /api/v1/admin/chat/presence` - [Admin] Agen online dan away sesuai cakupan cabang
+  - `DELETE /api/v1/admin/chat/presence` - [Admin] Tandai agen offline sekarang
+  - `GET /api/v1/admin/chat/queue` - [Admin] Antrean percakapan plus `summary.agentsOnline` dan `summary.agentsAway`
 - **Cart dan recovery**:
   - `GET /api/v1/cart` - Keranjang persisten milik user
   - `POST /api/v1/cart/recover/:token` - Pulihkan cart dari link email

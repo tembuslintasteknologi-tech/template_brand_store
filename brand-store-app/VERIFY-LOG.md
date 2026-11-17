@@ -1690,3 +1690,114 @@ Catatan:
     jalur kode.
   - drizzle/meta/_journal.json masih hanya memuat 0000 dan 0006, sehingga 0007 sampai 0015
     belum terjurnal. Migrasi baru ditulis idempoten supaya aman dijalankan manual.
+
+### 2026-11-17 (lanjutan 18) - indikator mengetik (RTC-004) dan kehadiran agen (RTC-006)
+
+Command:
+```powershell
+cd brand-store-app
+npx tsc --noEmit; "tsc exit: $LASTEXITCODE"
+```
+Output:
+```
+tsc exit: 0
+```
+
+Command (suite baru saja):
+```powershell
+cd brand-store-app
+node --import tsx/esm --test src/tests/chatPresence.test.ts 2>&1 | Select-String -Pattern "^not ok|^# (tests|pass|fail)"
+```
+Output:
+```
+# tests 18
+# pass 18
+# fail 0
+```
+
+Command (seluruh suite):
+```powershell
+cd brand-store-app
+npm test 2>&1 | Select-String -Pattern "^not ok|^# (tests|suites|pass|fail|cancelled|skipped|todo)"
+```
+Output:
+```
+# tests 750
+# suites 51
+# pass 750
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+Baseline blok sebelumnya 732 test di 51 suite. Kenaikan 18 test berasal dari
+src/tests/chatPresence.test.ts.
+
+Command (cek em dash pada file yang disentuh):
+```powershell
+cd brand-store-app
+$files = @('src/services/chat/chatPresence.ts','src/services/realtime/realtimeService.ts','src/routes/chat.ts','src/tests/chatPresence.test.ts','..\README.md','..\TASK-CHECKLIST.md')
+foreach ($f in $files) { $t = Get-Content $f -Raw; "$f emdash=" + ([regex]::Matches($t, [char]0x2014)).Count }
+```
+Output:
+```
+src/services/chat/chatPresence.ts emdash=0
+src/services/realtime/realtimeService.ts emdash=0
+src/routes/chat.ts emdash=0
+src/tests/chatPresence.test.ts emdash=0
+..\README.md emdash=0
+..\TASK-CHECKLIST.md emdash=82
+```
+Angka 82 pada TASK-CHECKLIST.md adalah em dash lama di baris lain, tidak bertambah oleh blok ini.
+
+Command (hitung checkbox TASK-CHECKLIST.md):
+Output:
+```
+x=156 p=5 n=31 total=192
+Sebelum blok ini: x=154 p=5 n=33 total=192.
+```
+Baris RTC-006 sempat dobel karena dua kali edit menyisipkan baris baru lalu mengganti baris
+lama, sehingga muncul dua baris identik. Duplikat dihapus, dan angka kembali konsisten
+156 + 5 + 31 = 192.
+
+Keputusan status:
+  [x] Indikator mengetik (RTC-004)
+      src/services/chat/chatPresence.ts memuat TYPING_TTL_MS 6000, TYPING_THROTTLE_MS 3000,
+      normalizeTypingState, typingExpiry, dan TypingThrottle. Stop selalu lolos dan mereset
+      kunci, jadi mulai mengetik lagi langsung terkirim. realtimeHub.broadcastTyping
+      menyiarkan event typing tanpa field body ke chat:branch:<id> dan chat:admin untuk
+      pelanggan, serta ke chat:user:<conversationUserId>, chat:branch:<id>, dan chat:admin
+      untuk staf. Kedua listener SSE menyaring payload.actorId === user.id supaya tidak ada
+      gema ke pengirim. Rute POST /api/v1/chat/conversations/:id/typing dan
+      POST /api/v1/admin/chat/conversations/:id/typing membalas emitted, state, expiresAt.
+  [x] Status online/offline agen (RTC-006)
+      Kehadiran disimpan di Redis lewat getRedisClient(), bukan Postgres: sorted set skor
+      timestamp plus hash metadata per agen dengan expire, kunci chat:presence:all,
+      chat:presence:branch:<branchId>, chat:presence:actor:<userId>, tanpa pemindaian KEYS.
+      PRESENCE_AWAY_MS 45000, PRESENCE_TTL_MS 90000, PRESENCE_HEARTBEAT_MS 30000.
+      recordHeartbeat mengembalikan previousStatus sehingga broadcastPresence hanya keluar
+      saat status berubah. listPresence memangkas entri basi saat dibaca, mengurutkan online
+      lebih dulu lalu label, dan label dimasking lewat maskLabel. Stream admin mencatat
+      denyut saat terbuka dan tiap 30 detik, lalu markOffline saat abort. Rute
+      POST /api/v1/admin/chat/heartbeat, GET /api/v1/admin/chat/presence,
+      DELETE /api/v1/admin/chat/presence, dan GET /api/v1/admin/chat/queue sekarang membawa
+      summary.agentsOnline dan summary.agentsAway.
+
+Catatan:
+  - Bug ditemukan lewat test, bukan lewat pembacaan kode: parseMeta di chatPresence.ts
+    memakai Date.now() nyata, jadi entri yang ditulis dengan timestamp uji 2023 selalu
+    terbaca offline. Parameter now sekarang diteruskan ke parseMeta, dan test dengan waktu
+    tetap menjadi mungkin.
+  - Test awal juga salah memasang listener, memakai realtimeHub.off(channel) tanpa fungsi
+    listener sehingga Node melempar ERR_INVALID_ARG_TYPE. Listener sekarang disimpan di Map
+    dan dilepas satu per satu.
+  - Throttle typing ada di memori proses. Pada beberapa instance API tiap instance punya
+    jendela throttle sendiri, efeknya hanya event typing sesekali lebih sering, bukan data
+    salah.
+  - Tradeoff multi-tab presence yang disengaja: menutup satu tab memanggil markOffline walau
+    tab lain masih terbuka, dan tab yang tersisa mendaftar ulang pada denyut berikutnya
+    (maksimal 30 detik basi).
+  - Belum ada halaman daftar agen dan notifikasi beban agen di frontend. Keduanya di luar
+    cakupan backend, jadi tidak diklaim selesai.
+  - Postgres lokal masih menolak login, jadi tidak ada smoke berbasis data untuk blok ini.
+    Bukti yang ada adalah tsc dan unit test.

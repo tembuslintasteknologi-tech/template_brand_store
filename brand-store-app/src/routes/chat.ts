@@ -17,6 +17,16 @@ import {
   listMessages,
   markConversationRead,
 } from '../services/chat/chatService.js';
+import {
+  PRESENCE_HEARTBEAT_MS,
+  listPresence,
+  markOffline,
+  maskLabel,
+  normalizeTypingState,
+  recordHeartbeat,
+  typingExpiry,
+  typingThrottle,
+} from '../services/chat/chatPresence.js';
 import { realtimeHub } from '../services/realtime/realtimeService.js';
 
 export const chatRoutes = new Hono();
@@ -59,6 +69,23 @@ function staffScope(c: any): { ok: true; branchIds: string[] | null } | { ok: fa
     };
   }
   return { ok: true, branchIds: decision.branchId ? [decision.branchId] : [] };
+}
+
+/**
+ * Identitas kehadiran agen. Cabang diambil dari cakupan staff, bukan dari klaim token, supaya
+ * agen pusat (cakupan null) tidak tercatat sebagai milik satu cabang.
+ */
+function presenceActorOf(c: any, scope: { branchIds: string[] | null }) {
+  const user = actorOf(c);
+  const branchId = Array.isArray(scope.branchIds)
+    ? scope.branchIds[0] ?? null
+    : user.branchId ?? user.branch_id ?? null;
+  return {
+    id: user.id,
+    role: user.role ?? 'admin',
+    branchId,
+    label: maskLabel(user.email),
+  };
 }
 
 function chatFail(c: any, err: any) {
@@ -193,6 +220,37 @@ chatRoutes.post('/conversations/:id/close', async (c) => {
   }
 });
 
+// POST /api/v1/chat/conversations/:id/typing - sinyal sesaat, tidak pernah disimpan ke database
+chatRoutes.post('/conversations/:id/typing', async (c) => {
+  try {
+    const user = actorOf(c);
+    const conversation = await getConversationForUser(c.req.param('id'), user.id);
+    const body = await c.req.json().catch(() => ({}));
+    const state = normalizeTypingState(body?.state ?? body?.typing ?? body?.status);
+    const at = Date.now();
+    const expiresAt = state === 'start' ? typingExpiry(at) : null;
+    const emitted = typingThrottle.shouldEmit(`typing:customer:${conversation.id}:${user.id}`, at, state);
+
+    if (emitted) {
+      realtimeHub.broadcastTyping({
+        conversationId: conversation.id,
+        branchId: conversation.branchId,
+        actorId: user.id,
+        actorRole: 'customer',
+        state,
+        expiresAt,
+      });
+    }
+
+    return c.json({
+      success: true,
+      data: { emitted, state, conversationId: conversation.id, expiresAt },
+    });
+  } catch (err: any) {
+    return chatFail(c, err);
+  }
+});
+
 // GET /api/v1/chat/stream - satu stream per user, bukan per percakapan
 chatRoutes.get('/stream', async (c) => {
   const user = actorOf(c);
@@ -213,6 +271,8 @@ chatRoutes.get('/stream', async (c) => {
     await send('open', { channel: 'customer', userId: user.id, at: new Date().toISOString() });
 
     const listener = (payload: any) => {
+      // Indikator mengetik tidak pernah di-echo ke orang yang mengetik.
+      if (payload?.actorId && payload.actorId === user.id) return;
       void send('chat', payload);
     };
     realtimeHub.on(channel, listener);
@@ -261,11 +321,12 @@ chatAdminRoutes.get('/queue', async (c) => {
     });
 
     const openCount = await countOpenConversations(scope.branchIds);
+    const presence = await listPresence({ branchIds: requestedBranch ? [requestedBranch] : scope.branchIds });
     return c.json({
       success: true,
       data: page.items,
       page: { nextCursor: page.nextCursor, hasMore: page.hasMore, limit: page.limit },
-      summary: { openConversations: openCount },
+      summary: { openConversations: openCount, agentsOnline: presence.summary.online, agentsAway: presence.summary.away },
     });
   } catch (err: any) {
     return chatFail(c, err);
@@ -356,6 +417,119 @@ chatAdminRoutes.post('/conversations/:id/messages', async (c) => {
   }
 });
 
+// POST /api/v1/admin/chat/conversations/:id/typing - agen sedang mengetik ke pelanggan
+chatAdminRoutes.post('/conversations/:id/typing', async (c) => {
+  try {
+    const scope = staffScope(c);
+    if (!scope.ok) return scope.response;
+    const user = actorOf(c);
+
+    const conversation = await getConversationForStaff(c.req.param('id'), scope.branchIds);
+    const body = await c.req.json().catch(() => ({}));
+    const state = normalizeTypingState(body?.state ?? body?.typing ?? body?.status);
+    const at = Date.now();
+    const expiresAt = state === 'start' ? typingExpiry(at) : null;
+    const emitted = typingThrottle.shouldEmit(`typing:staff:${conversation.id}:${user.id}`, at, state);
+
+    if (emitted) {
+      realtimeHub.broadcastTyping({
+        conversationId: conversation.id,
+        branchId: conversation.branchId,
+        userId: conversation.userId,
+        actorId: user.id,
+        actorRole: user.role === 'branch_admin' ? 'branch_admin' : 'admin',
+        state,
+        expiresAt,
+      });
+    }
+
+    return c.json({
+      success: true,
+      data: { emitted, state, conversationId: conversation.id, expiresAt },
+    });
+  } catch (err: any) {
+    return chatFail(c, err);
+  }
+});
+
+// POST /api/v1/admin/chat/heartbeat - denyut kehadiran agen, klien kirim tiap 30 detik
+chatAdminRoutes.post('/heartbeat', async (c) => {
+  try {
+    const scope = staffScope(c);
+    if (!scope.ok) return scope.response;
+
+    const actor = presenceActorOf(c, scope);
+    const { entry, previousStatus } = await recordHeartbeat(actor);
+
+    // Event hanya keluar saat status berubah, bukan tiap denyut.
+    if (previousStatus !== entry.status) {
+      realtimeHub.broadcastPresence({
+        branchId: entry.branchId,
+        userId: entry.userId,
+        role: entry.role,
+        label: entry.label,
+        status: entry.status,
+        lastSeenAt: entry.lastSeenAt,
+      });
+    }
+
+    return c.json({
+      success: true,
+      data: { ...entry, previousStatus, heartbeatIntervalMs: PRESENCE_HEARTBEAT_MS },
+    });
+  } catch (err: any) {
+    return chatFail(c, err);
+  }
+});
+
+// GET /api/v1/admin/chat/presence - agen online dan away sesuai cakupan cabang
+chatAdminRoutes.get('/presence', async (c) => {
+  try {
+    const scope = staffScope(c);
+    if (!scope.ok) return scope.response;
+
+    const requestedBranch = c.req.query('branchId') ?? null;
+    if (requestedBranch && Array.isArray(scope.branchIds) && !scope.branchIds.includes(requestedBranch)) {
+      return c.json(
+        { success: false, error: { code: 'BRANCH_SCOPE_MISMATCH', message: 'branch_admin hanya bisa melihat cabangnya sendiri' } },
+        403
+      );
+    }
+
+    const snapshot = await listPresence({ branchIds: requestedBranch ? [requestedBranch] : scope.branchIds });
+    return c.json({
+      success: true,
+      data: snapshot.agents,
+      summary: { ...snapshot.summary, heartbeatIntervalMs: PRESENCE_HEARTBEAT_MS },
+    });
+  } catch (err: any) {
+    return chatFail(c, err);
+  }
+});
+
+// DELETE /api/v1/admin/chat/presence - agen keluar, tandai offline sekarang juga
+chatAdminRoutes.delete('/presence', async (c) => {
+  try {
+    const scope = staffScope(c);
+    if (!scope.ok) return scope.response;
+
+    const actor = presenceActorOf(c, scope);
+    await markOffline(actor);
+    realtimeHub.broadcastPresence({
+      branchId: actor.branchId,
+      userId: actor.id,
+      role: actor.role,
+      label: actor.label,
+      status: 'offline',
+      lastSeenAt: new Date().toISOString(),
+    });
+
+    return c.json({ success: true, data: { userId: actor.id, status: 'offline' } });
+  } catch (err: any) {
+    return chatFail(c, err);
+  }
+});
+
 // POST /api/v1/admin/chat/conversations/:id/read
 chatAdminRoutes.post('/conversations/:id/read', async (c) => {
   try {
@@ -392,7 +566,10 @@ chatAdminRoutes.get('/stream', async (c) => {
   const scope = staffScope(c);
   if (!scope.ok) return scope.response;
 
+  const user = actorOf(c);
+  const actor = presenceActorOf(c, scope);
   const channels = ['chat:admin'];
+
   return streamSSE(c, async (stream) => {
     let open = true;
 
@@ -405,12 +582,37 @@ chatAdminRoutes.get('/stream', async (c) => {
       }
     };
 
-    await send('open', { channel: 'admin', branchIds: scope.branchIds, at: new Date().toISOString() });
+    /**
+     * Selama stream terbuka, agen dianggap hadir. Denyut dikirim saat stream dibuka dan tiap
+     * 30 detik sesudahnya, jadi menutup tab tanpa logout tetap membuat status turun sendiri
+     * jadi away lalu offline tanpa perlu sinyal penutupan yang bisa hilang.
+     */
+    const beat = async () => {
+      try {
+        const { entry, previousStatus } = await recordHeartbeat(actor);
+        if (previousStatus !== entry.status) {
+          realtimeHub.broadcastPresence({
+            branchId: entry.branchId,
+            userId: entry.userId,
+            role: entry.role,
+            label: entry.label,
+            status: entry.status,
+            lastSeenAt: entry.lastSeenAt,
+          });
+        }
+      } catch {
+        // Kegagalan presence tidak boleh ikut mematikan stream chat.
+      }
+    };
+    await beat();
+
+    await send('open', { channel: 'admin', userId: user.id, branchIds: scope.branchIds, at: new Date().toISOString() });
 
     const listener = (payload: any) => {
       if (Array.isArray(scope.branchIds)) {
         if (!payload?.branchId || !scope.branchIds.includes(payload.branchId)) return;
       }
+      if (payload?.actorId && payload.actorId === user.id) return;
       void send('chat', payload);
     };
 
@@ -421,11 +623,20 @@ chatAdminRoutes.get('/stream', async (c) => {
     }, 25_000);
     if (typeof (heartbeat as any).unref === 'function') (heartbeat as any).unref();
 
+    const presenceTimer = setInterval(() => {
+      void beat();
+    }, PRESENCE_HEARTBEAT_MS);
+    if (typeof (presenceTimer as any).unref === 'function') (presenceTimer as any).unref();
+
     await new Promise<void>((resolve) => {
       stream.onAbort(() => {
         open = false;
         clearInterval(heartbeat);
+        clearInterval(presenceTimer);
         for (const channel of channels) realtimeHub.off(channel, listener);
+        void markOffline(actor).catch(() => {
+          // Sudah offline atau Redis tidak tersedia, tidak ada yang perlu dilakukan.
+        });
         resolve();
       });
     });

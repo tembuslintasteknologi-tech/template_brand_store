@@ -37,6 +37,7 @@ import { chatAdminRoutes, chatRoutes } from './routes/chat.js';
 import { cartAdminRoutes, cartRoutes } from './routes/cart.js';
 import { realtimeRoutes } from './routes/realtime.js';
 import { pricingAdminRoutes, pricingPublicRoutes } from './routes/pricing.js';
+import { recommendationPublicRoutes } from './routes/recommendations.js';
 import { pingDatabase } from './db/index.js';
 import { redisPing } from './config/redis.js';
 
@@ -174,6 +175,7 @@ export function createApp() {
   api.route('/realtime', realtimeRoutes);
   api.route('/', pricingPublicRoutes);
   api.route('/admin', pricingAdminRoutes);
+  api.route('/', recommendationPublicRoutes);
 
   app.route('/api/v1', api);
   app.route('/webhooks/logistics', logisticsWebhookRoutes);

@@ -2051,3 +2051,137 @@ Catatan:
     login. Bukti blok ini adalah type check dan unit test, bukan smoke berbasis data.
   - Baseline sebelum blok ini 777 test. Kenaikan 29 test berasal dari `pricingEngine.test.ts` (13)
     dan `bannerExperiment.test.ts` (16).
+
+## 2026-11-19 - Rekomendasi Produk (Phase 4)
+
+Command (type check):
+```powershell
+cd brand-store-app
+npx tsc --noEmit
+```
+Output:
+```
+TSC_EXIT=0
+```
+
+Command (prettier pada berkas baru):
+```powershell
+npx prettier --check "src/services/recommendations/*.ts" "src/routes/recommendations.ts" "src/tests/recommendations.test.ts"
+```
+Output:
+```
+Checking formatting...
+All matched files use Prettier code style!
+PRETTIER_EXIT=0
+```
+
+Command (targeted test modul rekomendasi):
+```powershell
+node --import tsx/esm --test src/tests/recommendations.test.ts
+```
+Output (ringkas):
+```
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 952.6401
+```
+
+Command (full suite):
+```powershell
+npm test
+```
+Output (ringkas):
+```
+1..386
+# tests 818
+# suites 57
+# pass 818
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 10157.8474
+```
+
+Command (smoke route tanpa Postgres, memastikan handler tercapai dan bukan 404):
+```powershell
+@'
+import { createApp } from './src/app.ts';
+const app = createApp();
+for (const path of ['/api/v1/recommendations?limit=3&productIds=not-a-uuid', '/api/v1/recommendations/trending', '/api/v1/products/kaos-tembus-demo/recommendations']) {
+  const res = await app.request(`http://local${path}`, { headers: { 'x-forwarded-for': '10.91.0.1' } });
+  const body = await res.text();
+  console.log(path, '->', res.status, body.slice(0, 160));
+}
+'@ | Set-Content -Path ".\rec-smoke.mts"; node --import tsx/esm ".\rec-smoke.mts"; Remove-Item ".\rec-smoke.mts"
+```
+Output:
+```
+[HTTP] GET http://local/api/v1/recommendations?limit=3&productIds=not-a-uuid - 500 (45ms)
+/api/v1/recommendations?limit=3&productIds=not-a-uuid -> 500 {"success":false,"error":{"code":"RECOMMENDATION_FAILED","message":"Gagal memuat rekomendasi"}}
+[HTTP] GET http://local/api/v1/recommendations/trending - 500 (34ms)
+/api/v1/recommendations/trending -> 500 {"success":false,"error":{"code":"RECOMMENDATION_FAILED","message":"Gagal memuat rekomendasi"}}
+[HTTP] GET http://local/api/v1/products/kaos-tembus-demo/recommendations - 500 (36ms)
+/api/v1/products/kaos-tembus-demo/recommendations -> 500 {"success":false,"error":{"code":"RECOMMENDATION_FAILED","message":"Gagal memuat rekomendasi"}}
+```
+Catatan: 500 berasal dari Postgres yang menolak login (`password authentication failed for user
+"postgres"`), bukan dari route yang tidak ter-mount. Route yang tidak ada akan membalas 404.
+
+Command (cek em dash pada berkas yang diubah):
+```powershell
+$files = @('API-DOCS.md','VERIFY-LOG.md','..\TASK-CHECKLIST.md','src\services\recommendations\recommendationEngine.ts','src\services\recommendations\recommendationRepository.ts','src\routes\recommendations.ts','src\app.ts','src\tests\recommendations.test.ts')
+foreach ($f in $files) { $hits = (Select-String -Path $f -Pattern ([char]0x2014) -AllMatches | Measure-Object).Count; "$f : $hits em dash" }
+```
+Output:
+```
+API-DOCS.md : 0 em dash
+VERIFY-LOG.md : 0 em dash
+..\TASK-CHECKLIST.md : 79 em dash
+src\services\recommendations\recommendationEngine.ts : 0 em dash
+src\services\recommendations\recommendationRepository.ts : 0 em dash
+src\routes\recommendations.ts : 0 em dash
+src\app.ts : 0 em dash
+src\tests\recommendations.test.ts : 0 em dash
+```
+Catatan: 79 em dash di `TASK-CHECKLIST.md` adalah sisa gaya lama berkas itu. Baris Phase 4 yang
+ditulis pada blok ini memakai titik dua sebagai pemisah dan tidak menambah em dash baru.
+
+Ringkasan keputusan:
+  - PRD hanya menyebut "AI recommendations" tanpa provider, jadi implementasi memakai data transaksi
+    toko sendiri alih-alih memanggil model eksternal. Tidak ada kredensial yang dibutuhkan, dan tidak
+    ada vendor yang dikunci sebelum brand memilihnya.
+  - `recommendationEngine.ts` murni: tanpa jam, tanpa database, tanpa jaringan. `rankRecommendations`
+    menggabungkan tiga sinyal, membuang seed, membuang stok kosong, dan mengembalikan skor yang sudah
+    dibulatkan 4 desimal supaya respons API tidak membocorkan noise float.
+  - Co-purchase dinormalisasi terhadap jumlah order seed, bukan angka mentah. Produk yang muncul di 1
+    dari 2 order mengalahkan produk yang muncul di 10 dari 100 order. Rasio di-clamp 1 supaya
+    `sharedOrders` yang lebih besar dari `seedOrders` tidak menghasilkan skor di atas 60.
+  - Seed non-UUID dibuang sebelum query. Satu nilai rusak di query string tidak boleh menggagalkan
+    seluruh query Postgres, karena literal uuid yang salah membatalkan transaksi.
+  - `limit` rusak, nol, atau negatif jatuh ke default 8 dan nilai di atas 20 dipotong. Maksimal 10
+    seed diterima. Semua batas ini diuji.
+  - Cold start tidak menghasilkan shelf kosong: bila tidak ada sinyal sama sekali, produk published
+    dan tersedia diurutkan `createdAt` terbaru, lalu judul, lalu id, sehingga urutannya stabil.
+  - `meta.basis` melaporkan sinyal item teratas yang benar-benar dipakai. Shelf popularitas tidak
+    boleh berlabel "sering dibeli bersama".
+  - Query kandidat dibatasi: co-purchase 50, popularity 60, category 40, newest 20, lalu dedupe
+    sebelum baris produk diambil. Satu shelf tidak memindai seluruh katalog.
+  - Rekap `TASK-CHECKLIST.md` naik dari 161 ke 162 DONE, dari 26 ke 25 BELUM, total tetap 192.
+
+Catatan:
+  - Bobot 60/20/20 adalah default aman, bukan angka keramat. Kalau brand ingin menaikkan pengaruh
+    popularitas atau menambah sinyal klik dan view, angkanya ada di engine dan datanya belum ada di
+    skema saat ini.
+  - Rekomendasi tidak personal per pembeli. Semua pengunjung melihat shelf yang sama untuk seed yang
+    sama, sehingga respons aman di-cache 5 menit.
+  - Belum ada tracking impresi atau klik pada shelf, jadi kualitas rekomendasi belum bisa dievaluasi
+    dari data. Event itu harus ditambahkan lebih dulu kalau metrik dibutuhkan.
+  - Bukti blok ini adalah type check, unit test, dan smoke route. Belum ada smoke berbasis data nyata
+    karena Postgres lokal masih menolak login.
+  - Baseline sebelum blok ini 806 test. Kenaikan 12 test berasal dari `recommendations.test.ts`.

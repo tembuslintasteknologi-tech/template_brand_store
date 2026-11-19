@@ -884,3 +884,74 @@ kembali ke banner utama.
   tetap `npm run db:push`.
 - Belum ada pembobotan otomatis (multi-armed bandit). Bobot masih diatur manual per varian.
 
+## Rekomendasi Produk (Phase 4)
+
+Rekomendasi dihitung dari data transaksi toko sendiri, bukan dari penyedia model eksternal. PRD
+hanya menyebut "AI recommendations" tanpa provider, jadi sinyal yang dipakai adalah riwayat order
+lunas: co-purchase, category affinity, popularity, dan produk terbaru sebagai cold start.
+
+Bobot: co-purchase 60 (dinormalisasi `sharedOrders / max(seedOrders, 1)` lalu di-clamp 1), category
+20, popularity 20 (dinormalisasi unit terjual tertinggi). Skor tidak ditumpuk lintas produk, hanya
+diranking. Produk seed tidak pernah muncul di hasilnya, dan produk tanpa stok atau berstatus selain
+`published` dibuang.
+
+### Endpoint publik
+
+| Method | Path | Query | Keterangan |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/recommendations` | `productIds` (uuid, pisah koma, maksimal 10), `limit` (default 8, maksimal 20) | Shelf dari seed produk |
+| `GET` | `/api/v1/recommendations/trending` | `limit` | Shelf tanpa seed, murni popularity plus terbaru |
+| `GET` | `/api/v1/products/{slug}/recommendations` | `limit` | Shelf "produk terkait" untuk satu produk |
+
+Respons:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid-produk",
+      "title": "Kaos Tembus",
+      "slug": "kaos-tembus",
+      "categoryId": "uuid-kategori",
+      "price": "150000.00",
+      "stock": 12,
+      "strategy": "co_purchase",
+      "score": 72.4,
+      "signals": { "coPurchase": 60, "category": 0, "popularity": 12.4 }
+    }
+  ],
+  "meta": {
+    "basis": "co_purchase",
+    "limit": 8,
+    "seeds": ["uuid-seed"],
+    "count": 1,
+    "seedProduct": { "id": "uuid-seed", "title": "Seed", "slug": "seed" }
+  }
+}
+```
+
+`meta.basis` melaporkan sinyal item teratas yang benar-benar dipakai, bukan sinyal yang diharapkan.
+Nilainya salah satu dari `co_purchase`, `category`, `popularity`, atau `newest`. Klien memakai nilai
+ini untuk label shelf, supaya teks "sering dibeli bersama" tidak muncul pada daftar yang sebenarnya
+hanya urutan popularitas.
+
+Perilaku input:
+
+- `productIds` yang bukan UUID dibuang sebelum query, jadi satu nilai rusak tidak menggagalkan query
+  Postgres. Bila tidak ada seed valid sama sekali, route jatuh ke perilaku `trending`.
+- `limit` rusak, nol, atau negatif jatuh ke default 8. Nilai di atas 20 dipotong menjadi 20.
+- `GET /products/{slug}/recommendations` membalas `404` dengan kode `RECOMMENDATION_ERROR` bila slug
+  tidak ada atau produknya tidak `published`.
+- Respons memakai `Cache-Control: public, max-age=300, stale-while-revalidate=600`.
+
+### Keputusan yang masih terbuka
+
+- Bobot 60/20/20 adalah default aman. Kalau brand ingin menaikkan pengaruh popularitas atau menambah
+  sinyal baru (klik, view, wishlist), angkanya ada di `recommendationEngine.ts` dan datanya belum
+  tersedia di skema saat ini.
+- Rekomendasi tidak memakai personalisasi per pembeli. Semua pengunjung melihat shelf yang sama
+  untuk seed yang sama, sehingga hasilnya bisa di-cache.
+- Belum ada tracking impor atau klik pada shelf. Kalau nanti dibutuhkan evaluasi kualitas, event itu
+  harus ditambahkan lebih dulu.
+

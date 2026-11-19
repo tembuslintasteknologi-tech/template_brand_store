@@ -260,7 +260,7 @@ Kabar baiknya, sisi logistik sudah siap: `logisticProvider.ts` menerima `origin.
 - [x] Pricing engine lanjutan: dynamic, tiered, customer group (PRC-002..004): mesin harga murni di `src/services/pricing/pricingEngine.ts` dan repositori di `src/services/pricing/pricingRepository.ts`. Tiga tipe aturan: `dynamic` (jendela waktu, zona waktu dihitung dari `startAt`/`endAt`), `tiered` (bracket kuantitas, tier `minQuantity` tertinggi yang tercapai), dan `customer_group` (slug grup). Diskon tidak ditumpuk per baris: engine memilih satu aturan terbaik (persentase terbesar, lalu priority, lalu nama/id) supaya hasil quote deterministik. Harga varian menang atas `products.basePrice`, varian yang bukan milik produk ditolak `PRODUCT_VARIANT_NOT_FOUND`. Identitas pembeli untuk quote hanya dari bearer token, jadi grup tidak bisa diakui sendiri lewat body. Hook di `orderCreateService.createOrderWithItems` membaca aturan dan grup sekali per order lalu menyimpan snapshot `pricing`; kegagalan baca aturan atau grup hanya warning dan order jatuh ke harga katalog supaya pricing tidak memblokir penjualan. Endpoint publik `POST /api/v1/pricing/quote` plus admin `pricing/rules`, `pricing/groups`, `pricing/groups/:id/members` dengan guard `promos.view`/`promos.manage`. DDL `drizzle/0017_pricing_engine.sql`. Bukti: `pricingEngine.test.ts`, 13 test lulus. Angka kebijakan (zona waktu, batas tier wholesale, definisi grup) tetap milik brand dan dipasok lewat data aturan, bukan hardcode.
 - [x] Aggregator logistik multi-provider + rate comparison + failover (AGG-001..004): registry provider pluggable, `compareRates` lintas provider urut biaya, `pickCheapest`/`pickFastest`, dan failover saat satu provider gagal. Bukti: `logistics.test.ts` dan `tembusLogistics.test.ts`, 22 test lulus.
 - [ ] Adapter Stripe / DOKU / BNPL
-- [ ] Rekomendasi produk AI
+- [x] Rekomendasi produk AI: recommender berbasis data transaksi sendiri, bukan LLM, karena PRD hanya menyebut "AI recommendations" tanpa provider. Tiga sinyal digabung: co-purchase (produk yang muncul di order lunas yang sama dengan seed, bobot 60 dan dinormalisasi `sharedOrders / max(seedOrders, 1)` lalu di-clamp 1), category affinity (bobot 20), dan popularity (bobot 20, dinormalisasi unit terjual tertinggi). Aturan murni di `src/services/recommendations/recommendationEngine.ts` (12 ekspor termasuk `clampRecommendationLimit`, `normalizeSeedProductIds`, `rankRecommendations`, `describeRecommendationBasis`), query di `src/services/recommendations/recommendationRepository.ts` dengan batas kandidat co-purchase 50, popularity 60, category 40, newest 20 lalu dedupe sebelum ambil baris produk. Seed non-UUID dibuang sebelum menyentuh Postgres supaya query tidak abort, `limit` rusak atau nol jatuh ke default 8 dengan langit-langit 20 dan maksimal 10 seed. Cold start tetap mengisi shelf: produk published dan stok tersedia diurutkan `createdAt` terbaru lalu judul lalu id. Endpoint publik `GET /api/v1/recommendations?productIds=&limit=`, `GET /api/v1/recommendations/trending?limit=`, dan `GET /api/v1/products/:slug/recommendations?limit=`, masing-masing membawa `meta.basis` yang melaporkan sinyal item teratas yang benar-benar dipakai (bukan sinyal yang diharapkan) supaya label shelf tidak menipu. Bukti: `recommendations.test.ts`, 12 test lulus. Tidak butuh kredensial. Bobot sinyal adalah keputusan brand dan bisa diubah di engine tanpa mengubah query.
 - [ ] Marketing automation + email campaign
 - [x] Granular admin permission scopes (AUT-013): katalog 23 scope, default per role, override grant/revoke per user di `admin_permission_grants`, guard `requirePermission` membaca override tiap request, plus endpoint catalog/state/update. Bukti: `adminPermissions.test.ts`, 27 test lulus.
 - [ ] Scheduled email report (ADM-005)
@@ -309,11 +309,11 @@ Dihitung dari 192 item checkbox di dokumen ini (recount 2026-11-19; baris RTC-00
 
 | Status | Jumlah | Arti |
 |---|---|---|
-| `[x]` DONE | 161 | kode dipakai + lulus unit test / bukti perintah |
+| `[x]` DONE | 162 | kode dipakai + lulus unit test / bukti perintah |
 | `[~]` PARTIAL | 5 | sebagian sub-item sudah ada |
-| `[ ]` BELUM | 26 | belum dikerjakan |
+| `[ ]` BELUM | 25 | belum dikerjakan |
 
-Progres nyata: Phase 0, Phase 1, Phase 2, dan Fase 2.5 selesai penuh. Phase 3 sudah menutup dua sub-baris realtime terakhir (indikator mengetik dan status online agen) di samping baris penuh sebelumnya (flash sale, loyalty, referral, wallet, optimasi API mobile, banner analytics dan targeting, live chat, abandoned cart recovery, 2FA TOTP admin), dengan tiga baris partial (analytics keuangan, moderasi manual, load test). Phase 4 sudah menutup lima baris: multi-warehouse inventory (INV-007, INV-008), aggregator logistik multi-provider (AGG-001..004), granular admin permission scopes (AUT-013), pricing engine lanjutan (PRC-002..004), dan A/B testing banner (CMS-005). Sisa pekerjaan terbesar ada di Phase 4 (adapter pembayaran dan BNPL, rekomendasi AI, marketing automation, scheduled report) dan itu semuanya menunggu kredensial atau spesifikasi eksternal. Baris partial dan kosong sudah memuat aksi manusia yang diperlukan supaya bisa dikerjakan tanpa menebak.
+Progres nyata: Phase 0, Phase 1, Phase 2, dan Fase 2.5 selesai penuh. Phase 3 sudah menutup dua sub-baris realtime terakhir (indikator mengetik dan status online agen) di samping baris penuh sebelumnya (flash sale, loyalty, referral, wallet, optimasi API mobile, banner analytics dan targeting, live chat, abandoned cart recovery, 2FA TOTP admin), dengan tiga baris partial (analytics keuangan, moderasi manual, load test). Phase 4 sudah menutup enam baris: multi-warehouse inventory (INV-007, INV-008), aggregator logistik multi-provider (AGG-001..004), granular admin permission scopes (AUT-013), pricing engine lanjutan (PRC-002..004), A/B testing banner (CMS-005), dan rekomendasi produk. Sisa pekerjaan terbesar ada di Phase 4 (adapter pembayaran dan BNPL, marketing automation, scheduled report) dan itu semuanya menunggu kredensial atau spesifikasi eksternal. Baris partial dan kosong sudah memuat aksi manusia yang diperlukan supaya bisa dikerjakan tanpa menebak.
 
 ### Bukti perintah terakhir
 
@@ -333,9 +333,9 @@ You are linting "src/**/*.ts", but all of the files matching the glob pattern "s
 [lint exit: 2]   <-- gate lint belum berfungsi, lihat catatan item ESLint di atas
 
 $ cd brand-store-app && npm test
-# tests 806
+# tests 818
 # suites 57
-# pass 806
+# pass 818
 # fail 0
 # cancelled 0
 # skipped 0
@@ -343,7 +343,7 @@ $ cd brand-store-app && npm test
 [test exit: 0]
 ```
 
-Baseline sebelum 2026-11-19 adalah 777 test. Kenaikan 29 test berasal dari `pricingEngine.test.ts` (13) dan `bannerExperiment.test.ts` (16).
+Baseline sebelum 2026-11-19 adalah 777 test. Kenaikan 41 test berasal dari `pricingEngine.test.ts` (13), `bannerExperiment.test.ts` (16), dan `recommendations.test.ts` (12).
 
 Smoke test HTTP nyata (29/29) dan verifikasi migrasi + seed tercatat lengkap di `AUDIT-REPORT.md` §3. Smoke test belum bisa dijalankan ulang sekarang karena kredensial `postgres` lokal belum diketahui (lihat blocker di bawah).
 
@@ -380,7 +380,7 @@ Butuh password atau URL `DATABASE_URL` yang benar untuk PostgreSQL lokal. Semua 
 **D. Phase 4 yang butuh kredensial atau keputusan bisnis (dicatat 2026-11-17)**
 
 1. Adapter Stripe / DOKU / BNPL: butuh kunci sandbox, metode pembayaran yang diaktifkan, dan spesifikasi BNPL (provider, tenor, skema biaya).
-2. Rekomendasi produk AI: butuh provider model, kunci API, dan definisi sinyal rekomendasi (riwayat order, klik, stok).
+2. Rekomendasi produk: selesai 2026-11-19. Tidak butuh kredensial. PRD hanya menyebut "AI recommendations" tanpa provider, jadi implementasinya memakai data transaksi sendiri (co-purchase, category affinity, popularity, terbaru sebagai cold start) alih-alih memanggil model eksternal. Kalau brand nanti ingin sinyal tambahan seperti klik atau view, itu keputusan produk dan datanya belum ada di skema.
 3. Marketing automation, email campaign, dan scheduled email report (ADM-005): butuh penyedia email beserta kunci API atau SMTP, alamat pengirim terverifikasi, dan jadwal kirim.
 4. Pricing engine lanjutan (PRC-002..004): selesai 2026-11-19. Tidak butuh kredensial. Angka kebijakan (zona waktu dynamic pricing, batas tier wholesale, definisi customer group) tetap milik brand dan diisi sebagai data aturan lewat admin endpoint, bukan hardcode.
 5. A/B testing banner (CMS-005): selesai 2026-11-19. Tidak butuh kredensial. Metrik pemenang bisa diatur per eksperimen; default yang dipakai adalah CTR dengan ambang `minViews` 100.

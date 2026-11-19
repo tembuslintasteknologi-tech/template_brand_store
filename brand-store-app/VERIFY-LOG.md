@@ -2185,3 +2185,126 @@ Catatan:
   - Bukti blok ini adalah type check, unit test, dan smoke route. Belum ada smoke berbasis data nyata
     karena Postgres lokal masih menolak login.
   - Baseline sebelum blok ini 806 test. Kenaikan 12 test berasal dari `recommendations.test.ts`.
+
+---
+
+## 2026-11-19 - Keamanan dan Operasional
+
+Command (type check):
+```powershell
+cd brand-store-app
+npx tsc --noEmit
+```
+Output:
+```
+TSC_EXIT=0
+```
+
+Command (targeted test untuk empat modul baru):
+```powershell
+node --import tsx/esm --test src/tests/piiMasking.test.ts src/tests/adminIpAllowlist.test.ts src/tests/metrics.test.ts src/tests/adminPasswordPolicy.test.ts
+```
+Output (ringkas):
+```
+1..35
+# tests 35
+# suites 0
+# pass 35
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 411.1873
+```
+
+Rincian per file:
+```
+piiMasking            : 9 test, 9 pass, 0 fail
+adminIpAllowlist      : 8 test, 8 pass, 0 fail
+metrics               : 11 test, 11 pass, 0 fail
+adminPasswordPolicy   : 7 test, 7 pass, 0 fail
+```
+
+Command (full suite):
+```powershell
+npm test
+```
+Output (ringkas):
+```
+1..421
+# tests 853
+# suites 57
+# pass 853
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 8529.9205
+```
+
+Command (smoke route, tanpa Postgres):
+```powershell
+@'
+import { createApp } from './src/app.ts';
+const app = createApp();
+for (const path of ['/metrics', '/metrics/alerts', '/api/v1/recommendations/trending']) {
+  const res = await app.request('http://local' + path, { headers: { 'x-forwarded-for': '10.92.0.1' } });
+  const body = await res.text();
+  console.log(path, '->', res.status, body.slice(0, 120).replace(/\n/g, ' '));
+}
+'@ | Set-Content -Path ".\sec-smoke.mts"; node --import tsx/esm ".\sec-smoke.mts"; Remove-Item ".\sec-smoke.mts"
+```
+Output:
+```
+/metrics -> 200 {"success":true,"data":{"service":"brand-store-api","uptimeSeconds":0,"totals":{"requests":0,"errors":0,"errorRate":0,"a
+/metrics/alerts -> 200 {"success":true,"data":{"status":"ok","alerts":[],"evaluatedAt":"2026-11-19T04:25:31.503Z"}}
+[recommendations] password authentication failed for user "postgres"
+/api/v1/recommendations/trending -> 500 {"success":false,"error":{"code":"RECOMMENDATION_FAILED","message":"Gagal memuat rekomendasi"}}
+```
+Catatan: route rekomendasi gagal karena Postgres lokal menolak login, bukan karena perubahan keamanan. Dua route metrics membuktikan middleware dan handler terpasang.
+
+Command (smoke backup saat koneksi gagal):
+```powershell
+$dir = Join-Path $env:TEMP "tembus-backup-smoke"
+Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+pwsh -NoProfile -File scripts/backup-db.ps1 -DatabaseUrl "postgres://nobody:Nope12345%21@127.0.0.1:59999/ghostdb" -OutputDir $dir -RetainDays 0
+"BACKUP_EXIT=$LASTEXITCODE"
+"FILES_LEFT=$(@(Get-ChildItem $dir -ErrorAction SilentlyContinue).Count)"
+```
+Output (ringkas):
+```
+Backup ghostdb@127.0.0.1:59999 ke C:\Users\yogis\AppData\Local\Temp\tembus-backup-smoke\ghostdb-20261119-112523.dump
+pg_dump: error: connection to server at "127.0.0.1", port 59999 failed: Connection refused (0x0000274D/10061)
+Exception: ... backup-db.ps1:125 ... pg_dump gagal dengan exit code 1.
+BACKUP_EXIT=1
+FILES_LEFT=0
+```
+Password dari connection string tidak muncul di output, dan file dump parsial terhapus sehingga folder tidak menyisakan backup yang terlihat sah.
+
+Command (format file yang disentuh):
+```powershell
+npx prettier --check "src/services/security/piiMasker.ts" "src/middleware/metrics.ts" "src/tests/piiMasking.test.ts"
+```
+Output:
+```
+Checking formatting...
+All matched files use Prettier code style!
+```
+Catatan: `npx prettier --check "src/**/*.ts"` masih gagal pada 177 file lama yang tidak disentuh blok ini (`src/utils/pagination.ts`, `src/validators/schemas.ts`, dan seterusnya). Itu drift format bawaan repo, bukan regresi blok ini, dan belum diperbaiki supaya diff tetap fokus.
+
+Yang berubah:
+  - `src/services/security/piiMasker.ts` plus `src/config/logger.ts`: email, telepon, token, cookie, authorization, dan query URL sensitif dimasking sebelum log ditulis. `redactUrl` membuang query string yang membawa token reset.
+  - `src/middleware/security.ts`: `adminIpAllowlist` dengan parser CIDR IPv4 dan IPv6 sederhana. Daftar kosong berarti allow all supaya dev lokal dan test suite tidak pecah; produksi wajib mengisi `ADMIN_IP_ALLOWLIST`.
+  - `src/services/observability/metrics.ts`, `src/middleware/metrics.ts`, `src/routes/metrics.ts`: four golden signals (latency p50/p95/p99, traffic, error rate, saturation) in-memory tanpa dependensi baru. `/metrics` terbuka di non-production, di production butuh `METRICS_TOKEN` dan menjawab 503 `METRICS_DISABLED` bila token belum diisi. `/metrics/alerts` mengevaluasi threshold dari `docs/OPERATIONS.md`.
+  - `src/services/auth/adminPasswordPolicy.ts`: `KNOWN_DEFAULT_ADMIN_PASSWORDS` memuat dua password seed yang beredar (`AdminPassword123!` dari fallback kode dan `Admin12345!` dari `.env.example`). `isHashOfDefaultPassword` memverifikasi hash terhadap seluruh daftar, bukan satu nilai.
+  - `src/routes/auth.ts`: login menandai `mustChangePassword` plus header `x-password-change-required`, dan `POST /auth/change-password` menolak password default serta memaksa ganti sebelum token dipakai untuk aksi admin.
+  - `src/services/admin/users.ts`: `listCustomers` memasking email dan telepon. Detail customer tetap penuh karena endpoint itu dibatasi permission.
+  - `docs/OPERATIONS.md`, `docs/COMPLIANCE-UU-ITE-PDP.md`, `scripts/backup-db.ps1`, `scripts/restore-db.ps1`, `API-DOCS.md`, `.env.example`.
+
+Catatan:
+  - AES-256-GCM untuk secret TOTP sudah ada di `src/services/auth/secretBox.ts`. TLS 1.3 tetap konfigurasi reverse proxy dan belum diuji di server nyata, jadi baris enkripsi tetap `[~]`.
+  - Backup dan restore baru terbukti pada jalur gagal. Restore end-to-end butuh Postgres yang menerima login, dan jadwal cron atau Task Scheduler belum dipasang, jadi baris backup tetap `[~]`.
+  - `docs/COMPLIANCE-UU-ITE-PDP.md` adalah checklist teknis dan gap analysis, bukan opini legal. Review pengacara tetap aksi manusia, jadi baris compliance tetap `[~]`.
+  - OpenTelemetry belum ditambahkan. Tracing saat ini hanya `requestId` yang ikut di log dan response.
+  - Rekap `TASK-CHECKLIST.md` naik dari 162 ke 166 DONE, dari 5 ke 8 PARTIAL, dari 25 ke 18 BELUM, total tetap 192.
+  - Metrik in-memory hilang saat proses restart dan tidak agregat lintas instance. Kalau butuh histori, langkah berikutnya adalah exporter Prometheus, bukan menyimpan di proses.

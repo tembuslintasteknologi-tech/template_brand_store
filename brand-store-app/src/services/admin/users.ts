@@ -2,6 +2,7 @@ import { db } from '../../db/index.js';
 import { users } from '../../db/schema.js';
 import { and, count, desc, eq } from 'drizzle-orm';
 import { recordAdminAction } from './auditLog.js';
+import { maskEmail, maskPhone } from '../security/piiMasker.js';
 
 export class AdminUserError extends Error {
   readonly status: number;
@@ -50,8 +51,17 @@ export async function listCustomers(options: ListCustomersOptions = {}) {
       })
     : rows;
 
+  // Daftar customer dipakai untuk penyusuran cepat, bukan untuk menghubungi orang satu per satu.
+  // Email dan nomor HP dimasking di sini; nilai penuh hanya terbuka di endpoint detail yang
+  // dibatasi permission, supaya daftar tidak berubah menjadi ekspor PII gratis.
+  const customers = filtered.map((row) => ({
+    ...row,
+    email: maskEmail(row.email),
+    phone: row.phone ? maskPhone(row.phone) : row.phone,
+  }));
+
   return {
-    customers: filtered,
+    customers,
     total: Number(totalRow?.total ?? 0),
     limit,
     offset,

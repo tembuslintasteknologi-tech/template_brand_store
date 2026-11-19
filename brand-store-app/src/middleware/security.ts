@@ -131,3 +131,120 @@ export function tieredRateLimiter(tier: 'public' | 'auth' | 'admin' = 'public') 
   const scope: RateLimitScope = tier === 'auth' ? 'auth' : tier === 'admin' ? 'admin' : 'api';
   return rateLimiter(scope);
 }
+
+// ---------------------------------------------------------------------------
+// IP allowlist untuk endpoint admin
+// ---------------------------------------------------------------------------
+
+export interface IpAllowlistConfig {
+  /** Entri yang sudah dinormalisasi: IPv4, IPv6, atau CIDR IPv4. */
+  entries: string[];
+  /** Daftar kosong berarti allow all, supaya instalasi lokal tidak terkunci. */
+  allowAll: boolean;
+}
+
+/**
+ * Format `ADMIN_IP_ALLOWLIST`: daftar dipisah koma, misalnya
+ * `10.0.0.0/8, 203.0.113.7, ::1`. Entri `*` juga berarti allow all.
+ */
+export function parseIpAllowlist(raw?: string): IpAllowlistConfig {
+  const entries = String(raw ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+
+  if (entries.includes('*')) {
+    return { entries: [], allowAll: true };
+  }
+
+  return { entries, allowAll: entries.length === 0 };
+}
+
+/** IPv4 dotted quad ke integer 32-bit, null kalau formatnya tidak valid. */
+export function ipv4ToInt(value: string): number | null {
+  const parts = String(value ?? '')
+    .trim()
+    .split('.');
+  if (parts.length !== 4) return null;
+  let result = 0;
+  for (const part of parts) {
+    if (!/^\d{1,3}$/.test(part)) return null;
+    const octet = Number(part);
+    if (octet < 0 || octet > 255) return null;
+    result = result * 256 + octet;
+  }
+  return result >>> 0;
+}
+
+function normalizeIp(value: string): string {
+  const ip = String(value ?? '').trim();
+  // Node dan beberapa proxy mengirim alamat IPv4 sebagai ::ffff:10.0.0.1.
+  if (ip.toLowerCase().startsWith('::ffff:') && ip.includes('.')) {
+    return ip.slice(7);
+  }
+  return ip;
+}
+
+/** Cocokkan satu alamat IP dengan satu entri allowlist (exact, CIDR IPv4, atau IPv6 exact). */
+export function ipMatchesEntry(ip: string, entry: string): boolean {
+  const address = normalizeIp(ip);
+  const rule = normalizeIp(entry);
+  if (!address || !rule) return false;
+  if (address === rule) return true;
+
+  const slash = rule.indexOf('/');
+  if (slash === -1) return false;
+  if (address.includes(':')) return false;
+
+  const base = rule.slice(0, slash);
+  const prefixRaw = rule.slice(slash + 1);
+  if (!/^\d{1,2}$/.test(prefixRaw)) return false;
+  const prefix = Number(prefixRaw);
+  if (prefix < 0 || prefix > 32) return false;
+
+  const baseInt = ipv4ToInt(base);
+  const addressInt = ipv4ToInt(address);
+  if (baseInt === null || addressInt === null) return false;
+  if (prefix === 0) return true;
+
+  const mask = (0xffffffff << (32 - prefix)) >>> 0;
+  return (baseInt & mask) === (addressInt & mask);
+}
+
+export function isIpAllowed(ip: string, config: IpAllowlistConfig): boolean {
+  if (config.allowAll) return true;
+  return config.entries.some((entry) => ipMatchesEntry(ip, entry));
+}
+
+/**
+ * Penjaga endpoint admin. Kalau `ADMIN_IP_ALLOWLIST` tidak diisi, semua IP lolos supaya
+ * pengembangan lokal dan test suite tidak pecah. Di produksi variabel ini wajib diisi.
+ */
+export function adminIpAllowlist(raw: string | undefined = process.env.ADMIN_IP_ALLOWLIST) {
+  const config = parseIpAllowlist(raw);
+
+  return async function adminIpGuard(c: Context, next: Next) {
+    if (config.allowAll) {
+      await next();
+      return;
+    }
+
+    const ip = clientIp(c);
+    if (isIpAllowed(ip, config)) {
+      await next();
+      return;
+    }
+
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'IP_NOT_ALLOWED',
+          message: 'This IP address is not allowed to access admin endpoints',
+          requestId: c.get('requestId') ?? null,
+        },
+      },
+      403
+    );
+  };
+}

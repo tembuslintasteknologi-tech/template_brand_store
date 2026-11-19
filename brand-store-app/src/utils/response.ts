@@ -7,7 +7,11 @@ export type ErrorCode =
   | 'FORBIDDEN'
   | 'CONFLICT'
   | 'RATE_LIMITED'
-  | 'INTERNAL_ERROR';
+  | 'INTERNAL_ERROR'
+  | 'USER_NOT_FOUND'
+  | 'INVALID_CREDENTIALS'
+  | 'PASSWORD_UNCHANGED'
+  | 'WEAK_PASSWORD';
 
 export interface ApiError {
   success: false;

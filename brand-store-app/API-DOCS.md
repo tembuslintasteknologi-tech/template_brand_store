@@ -4,7 +4,9 @@ Base URL: \/api/v1\
 
 ## Authentication Endpoints
 - \POST /api/v1/auth/register\: Register a new customer or admin account.
-- \POST /api/v1/auth/login\: Authenticate and receive access & refresh tokens.
+- \POST /api/v1/auth/login\: Authenticate and receive access & refresh tokens. Respons memuat
+  `mustChangePassword` bila akun admin masih memakai password seed default.
+- \POST /api/v1/auth/change-password\: Ganti password akun yang sedang login, wajib password lama.
 - \POST /api/v1/auth/refresh\: Rotate refresh token and get new access token.
 
 ## Inventory Endpoints
@@ -955,3 +957,152 @@ Perilaku input:
 - Belum ada tracking impor atau klik pada shelf. Kalau nanti dibutuhkan evaluasi kualitas, event itu
   harus ditambahkan lebih dulu.
 
+
+## Keamanan dan Operasional
+
+Bagian ini menutup item checklist lintas phase: password admin default, IP allowlist endpoint admin,
+dan endpoint metrik untuk four golden signals. Dokumen operasional lengkap ada di
+`docs/OPERATIONS.md`.
+
+### Ganti password setelah seed
+
+Seed membuat akun admin dari `ADMIN_PASSWORD`. Selama nilainya kosong atau masih sama dengan contoh di
+repo (`AdminPassword123!` atau `Admin12345!`), akun admin dianggap memakai kredensial publik.
+
+Respons login akun admin yang masih memakai password itu membawa penanda:
+
+```json
+{
+  "success": true,
+  "data": {
+    "token": "mock-admin-token",
+    "mustChangePassword": true,
+    "user": {
+      "id": "uuid",
+      "email": "admin@brandstore.com",
+      "role": "admin",
+      "mustChangePassword": true
+    }
+  }
+}
+```
+
+Header respons juga memuat `x-password-change-required: true`. Frontend wajib mengarahkan admin ke
+form ganti password sebelum menampilkan fitur lain. Flag ini dihitung dari hash di database, bukan dari
+environment, jadi admin yang sudah mengganti password tidak akan terus diminta mengganti.
+
+`POST /api/v1/auth/change-password`
+
+Header: `Authorization: Bearer <token>`
+
+Body:
+
+```json
+{
+  "currentPassword": "AdminPassword123!",
+  "newPassword": "Rahasia#Kuat2026"
+}
+```
+
+Aturan password baru:
+
+- Minimal 12 karakter.
+- Memuat huruf kecil, huruf besar, angka, dan simbol.
+- Tidak boleh spasi.
+- Tidak boleh sama dengan password lama.
+- Tidak boleh memuat password seed default, bagian email, atau nama lengkap.
+
+Respons sukses:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "email": "admin@brandstore.com",
+    "mustChangePassword": false,
+    "changedAt": "2026-11-19T04:00:00.000Z"
+  }
+}
+```
+
+Tabel error:
+
+| Status | Kode | Penyebab |
+| --- | --- | --- |
+| `400` | `VALIDATION_ERROR` | `currentPassword` atau `newPassword` kosong |
+| `400` | `PASSWORD_UNCHANGED` | password baru sama dengan password lama |
+| `400` | `WEAK_PASSWORD` | password baru tidak lolos kebijakan, `details` memuat daftar alasan |
+| `401` | `UNAUTHORIZED` | token tidak ada atau tidak valid |
+| `401` | `INVALID_CREDENTIALS` | password lama salah |
+| `404` | `USER_NOT_FOUND` | user di token sudah tidak ada |
+
+Catatan: token login saat ini masih token mock untuk peran admin (`mock-admin-token`). Uji end-to-end
+endpoint ini memerlukan user nyata di database dan token JWT asli.
+
+### IP allowlist endpoint admin
+
+Semua path `/api/v1/admin/*` melewati `adminIpAllowlist()`.
+
+| Kondisi `ADMIN_IP_ALLOWLIST` | Perilaku |
+| --- | --- |
+| kosong atau `*` | semua IP lolos, proteksi belum aktif |
+| `10.0.0.0/8, 203.0.113.7` | hanya IP yang cocok yang lolos |
+| IPv6 | cocok exact, misalnya `::1` |
+
+Request dari IP di luar daftar dibalas:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "IP_NOT_ALLOWED",
+    "message": "This IP address is not allowed to access admin endpoints",
+    "requestId": "uuid"
+  }
+}
+```
+
+Status `403`. IP diambil dari `x-forwarded-for` hop pertama, lalu `cf-connecting-ip`, lalu `x-real-ip`.
+Reverse proxy wajib menimpa `x-forwarded-for` dengan alamat klien sebenarnya, bukan meneruskan nilai
+dari klien.
+
+### Metrik four golden signals
+
+| Method | Path | Keterangan |
+| --- | --- | --- |
+| `GET` | `/metrics` | snapshot traffic, latency, error, saturation, plus daftar alert |
+| `GET` | `/metrics/alerts` | hanya keputusan alert (`ok`, `warning`, `critical`) |
+
+Akses:
+
+| Kondisi | Perilaku |
+| --- | --- |
+| `METRICS_TOKEN` diisi | wajib `x-metrics-token` atau `Authorization: Bearer <token>` |
+| kosong dan `NODE_ENV=production` | `503` dengan kode `METRICS_DISABLED` |
+| kosong dan bukan production | terbuka |
+
+Token salah dibalas `401` dengan kode `METRICS_UNAUTHORIZED`.
+
+Contoh potongan respons `GET /metrics`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "service": "brand-store-api",
+    "uptimeSeconds": 3600,
+    "totals": { "requests": 1200, "errors": 8, "errorRate": 0.0067, "avgMs": 42.5 },
+    "latency": { "p50Ms": 100, "p95Ms": 250, "p99Ms": 500, "maxMs": 900, "buckets": [] },
+    "saturation": { "memoryUsedPercent": 41.2, "heapUsedBytes": 0, "heapTotalBytes": 0, "rssBytes": 0 },
+    "routes": [
+      { "route": "/api/v1/products", "count": 400, "errors": 1, "errorRate": 0.0025, "avgMs": 30.1, "p95Ms": 100, "maxMs": 220 }
+    ],
+    "alerts": []
+  }
+}
+```
+
+Ambang alert bisa diubah lewat `ALERT_ERROR_RATE`, `ALERT_P95_LATENCY_MS`,
+`ALERT_MEMORY_USED_PERCENT`, dan `ALERT_MIN_SAMPLES`. Nilai default dan runbook ada di
+`docs/OPERATIONS.md`.

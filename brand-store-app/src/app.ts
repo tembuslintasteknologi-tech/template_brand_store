@@ -8,8 +8,11 @@ import {
   correlationIdMiddleware,
   securityHeadersMiddleware,
   rateLimiter,
+  adminIpAllowlist,
 } from './middleware/security.js';
 import { requestLogger } from './middleware/logging.js';
+import { metricsMiddleware } from './middleware/metrics.js';
+import { metricsRoutes } from './routes/metrics.js';
 import { maintenanceMiddleware } from './middleware/maintenance.js';
 import { authRoutes } from './routes/auth.js';
 import { productRoutes } from './routes/products.js';
@@ -96,6 +99,7 @@ export function createApp() {
 
   app.use('*', correlationIdMiddleware());
   app.use('*', maintenanceMiddleware());
+  app.use('*', metricsMiddleware());
   app.use('*', securityHeadersMiddleware());
   app.use(
     '*',
@@ -130,7 +134,10 @@ export function createApp() {
     return c.json({ success: true, data: report }, 200);
   });
 
+  app.route('/metrics', metricsRoutes);
+
   app.use('/api/v1/*', rateLimiter('api'));
+  app.use('/api/v1/admin/*', adminIpAllowlist());
   app.use('/api/v1/auth/login', rateLimiter('auth'));
   app.use('/api/v1/auth/register', rateLimiter('auth'));
   app.use('/api/v1/auth/refresh', rateLimiter('auth'));

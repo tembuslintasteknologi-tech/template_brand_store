@@ -270,15 +270,15 @@ Kabar baiknya, sisi logistik sudah siap: `logisticProvider.ts` menerima `origin.
 
 ## Keamanan & Operasional (lintas phase)
 
-- [ ] Enkripsi field sensitif AES-256, TLS 1.3
-- [ ] PII masking di log dan admin view
-- [x] CSP header, sanitasi input, proteksi CSRF untuk web — CSP + security header, input sanitization middleware, dan CSRF protection middleware DONE
-- [ ] IP allowlist untuk endpoint admin
-- [ ] Monitoring: four golden signals + alert threshold
-- [ ] OpenTelemetry tracing
-- [ ] Backup & restore database terjadwal
-- [ ] Compliance check: UU ITE, UU PDP (dan GDPR bila ada customer EU)
-- [ ] Ganti password admin default setelah seed
+- [~] Enkripsi field sensitif AES-256, TLS 1.3: AES-256-GCM untuk secret TOTP sudah ada di `src/services/auth/secretBox.ts`, TLS 1.3 baru sebatas konfigurasi reverse proxy di `docs/OPERATIONS.md` dan belum diverifikasi di server nyata
+- [x] PII masking di log dan admin view: `src/services/security/piiMasker.ts` dipakai `src/config/logger.ts` (email, telepon, token, query URL di-redact) dan `listCustomers` memasking email/telepon
+- [x] CSP header, sanitasi input, proteksi CSRF untuk web - CSP + security header, input sanitization middleware, dan CSRF protection middleware DONE
+- [x] IP allowlist untuk endpoint admin: `adminIpAllowlist` di `src/middleware/security.ts` mendukung CIDR, default kosong = allow all (produksi wajib isi `ADMIN_IP_ALLOWLIST`)
+- [x] Monitoring: four golden signals + alert threshold: `src/services/observability/metrics.ts` (latency, traffic, error, saturation), `/metrics` dan `/metrics/alerts` dengan threshold di `docs/OPERATIONS.md`
+- [ ] OpenTelemetry tracing: belum ada SDK, tracing masih manual lewat `requestId`
+- [~] Backup & restore database terjadwal: `scripts/backup-db.ps1` dan `scripts/restore-db.ps1` selesai dan smoke gagal-koneksi terbukti bersih, jadwal cron/Task Scheduler dan restore end-to-end belum terbukti karena Postgres lokal menolak login
+- [~] Compliance check: UU ITE, UU PDP (dan GDPR bila ada customer EU): checklist dan gap analysis ada di `docs/COMPLIANCE-UU-ITE-PDP.md`, review legal manusia belum
+- [x] Ganti password admin default setelah seed: `KNOWN_DEFAULT_ADMIN_PASSWORDS` menandai hash password seed, login mengirim `mustChangePassword` plus header `x-password-change-required`, `POST /auth/change-password` menolak password default
 
 ---
 
@@ -309,11 +309,11 @@ Dihitung dari 192 item checkbox di dokumen ini (recount 2026-11-19; baris RTC-00
 
 | Status | Jumlah | Arti |
 |---|---|---|
-| `[x]` DONE | 162 | kode dipakai + lulus unit test / bukti perintah |
-| `[~]` PARTIAL | 5 | sebagian sub-item sudah ada |
-| `[ ]` BELUM | 25 | belum dikerjakan |
+| `[x]` DONE | 166 | kode dipakai + lulus unit test / bukti perintah |
+| `[~]` PARTIAL | 8 | sebagian sub-item sudah ada |
+| `[ ]` BELUM | 18 | belum dikerjakan |
 
-Progres nyata: Phase 0, Phase 1, Phase 2, dan Fase 2.5 selesai penuh. Phase 3 sudah menutup dua sub-baris realtime terakhir (indikator mengetik dan status online agen) di samping baris penuh sebelumnya (flash sale, loyalty, referral, wallet, optimasi API mobile, banner analytics dan targeting, live chat, abandoned cart recovery, 2FA TOTP admin), dengan tiga baris partial (analytics keuangan, moderasi manual, load test). Phase 4 sudah menutup enam baris: multi-warehouse inventory (INV-007, INV-008), aggregator logistik multi-provider (AGG-001..004), granular admin permission scopes (AUT-013), pricing engine lanjutan (PRC-002..004), A/B testing banner (CMS-005), dan rekomendasi produk. Sisa pekerjaan terbesar ada di Phase 4 (adapter pembayaran dan BNPL, marketing automation, scheduled report) dan itu semuanya menunggu kredensial atau spesifikasi eksternal. Baris partial dan kosong sudah memuat aksi manusia yang diperlukan supaya bisa dikerjakan tanpa menebak.
+Progres nyata: Phase 0, Phase 1, Phase 2, dan Fase 2.5 selesai penuh. Phase 3 sudah menutup dua sub-baris realtime terakhir (indikator mengetik dan status online agen) di samping baris penuh sebelumnya (flash sale, loyalty, referral, wallet, optimasi API mobile, banner analytics dan targeting, live chat, abandoned cart recovery, 2FA TOTP admin), dengan tiga baris partial (analytics keuangan, moderasi manual, load test). Phase 4 sudah menutup enam baris: multi-warehouse inventory (INV-007, INV-008), aggregator logistik multi-provider (AGG-001..004), granular admin permission scopes (AUT-013), pricing engine lanjutan (PRC-002..004), A/B testing banner (CMS-005), dan rekomendasi produk. Section Keamanan & Operasional menutup empat baris (PII masking, IP allowlist admin, four golden signals plus alert threshold, ganti password admin default) dan menyisakan tiga baris partial (enkripsi AES-256 plus TLS 1.3, backup terjadwal, compliance legal). Sisa pekerjaan terbesar ada di Phase 4 (adapter pembayaran dan BNPL, marketing automation, scheduled report) dan itu semuanya menunggu kredensial atau spesifikasi eksternal. Baris partial dan kosong sudah memuat aksi manusia yang diperlukan supaya bisa dikerjakan tanpa menebak.
 
 ### Bukti perintah terakhir
 
@@ -333,9 +333,9 @@ You are linting "src/**/*.ts", but all of the files matching the glob pattern "s
 [lint exit: 2]   <-- gate lint belum berfungsi, lihat catatan item ESLint di atas
 
 $ cd brand-store-app && npm test
-# tests 818
+# tests 853
 # suites 57
-# pass 818
+# pass 853
 # fail 0
 # cancelled 0
 # skipped 0
@@ -343,7 +343,7 @@ $ cd brand-store-app && npm test
 [test exit: 0]
 ```
 
-Baseline sebelum 2026-11-19 adalah 777 test. Kenaikan 41 test berasal dari `pricingEngine.test.ts` (13), `bannerExperiment.test.ts` (16), dan `recommendations.test.ts` (12).
+Baseline sebelum 2026-11-19 adalah 777 test. Kenaikan 76 test berasal dari `pricingEngine.test.ts` (13), `bannerExperiment.test.ts` (16), `recommendations.test.ts` (12), `piiMasking.test.ts` (9), `adminIpAllowlist.test.ts` (8), `metrics.test.ts` (11), dan `adminPasswordPolicy.test.ts` (7).
 
 Smoke test HTTP nyata (29/29) dan verifikasi migrasi + seed tercatat lengkap di `AUDIT-REPORT.md` §3. Smoke test belum bisa dijalankan ulang sekarang karena kredensial `postgres` lokal belum diketahui (lihat blocker di bawah).
 

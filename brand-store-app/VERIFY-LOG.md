@@ -1935,3 +1935,119 @@ Catatan:
   - Item Phase 4 yang butuh kredensial atau keputusan bisnis (Stripe/DOKU/BNPL, rekomendasi AI,
     email marketing dan scheduled report, angka pricing engine) dicatat di `TASK-CHECKLIST.md`
     bagian D, tidak diklaim selesai.
+
+---
+
+## 2026-11-19 - Pricing Engine dan A/B Testing Banner (PRC-002..004, CMS-005)
+
+Command (type check):
+```powershell
+cd brand-store-app
+npx tsc --noEmit
+```
+Output:
+```
+TSC_EXIT=0
+```
+
+Command (targeted test untuk dua modul baru):
+```powershell
+node --import tsx/esm --test src/tests/pricingEngine.test.ts src/tests/bannerExperiment.test.ts
+```
+Output (ringkas):
+```
+1..29
+# tests 29
+# suites 0
+# pass 29
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 992.6919
+```
+
+Command (full suite):
+```powershell
+npm test
+```
+Output (ringkas):
+```
+1..374
+# tests 806
+# suites 57
+# pass 806
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 10539.6568
+```
+
+Command (cek em dash pada berkas yang diubah):
+```powershell
+$files = @('API-DOCS.md','VERIFY-LOG.md','..\TASK-CHECKLIST.md','src\services\pricing\pricingEngine.ts','src\services\pricing\pricingRepository.ts','src\services\order\orderCreateService.ts','src\services\content\bannerExperimentService.ts','src\services\content\bannerService.ts','src\routes\pricing.ts','src\routes\content.ts','src\app.ts','src\db\schema.ts','src\tests\pricingEngine.test.ts','src\tests\bannerExperiment.test.ts','drizzle\0017_pricing_engine.sql','drizzle\0018_banner_ab.sql')
+foreach ($f in $files) { $hits = (Select-String -Path $f -Pattern ([char]0x2014) -AllMatches | Measure-Object).Count; "$f : $hits em dash" }
+```
+Output:
+```
+API-DOCS.md : 0 em dash
+VERIFY-LOG.md : 0 em dash
+..\TASK-CHECKLIST.md : 79 em dash
+src\services\pricing\pricingEngine.ts : 0 em dash
+src\services\pricing\pricingRepository.ts : 0 em dash
+src\services\order\orderCreateService.ts : 0 em dash
+src\services\content\bannerExperimentService.ts : 0 em dash
+src\services\content\bannerService.ts : 0 em dash
+src\routes\pricing.ts : 0 em dash
+src\routes\content.ts : 0 em dash
+src\app.ts : 0 em dash
+src\db\schema.ts : 0 em dash
+src\tests\pricingEngine.test.ts : 0 em dash
+src\tests\bannerExperiment.test.ts : 0 em dash
+drizzle\0017_pricing_engine.sql : 0 em dash
+drizzle\0018_banner_ab.sql : 0 em dash
+```
+Catatan: 79 em dash di `TASK-CHECKLIST.md` adalah sisa gaya lama berkas itu. Baris Phase 4 yang
+ditulis pada blok ini memakai titik dua sebagai pemisah dan tidak menambah em dash baru.
+
+Ringkasan keputusan:
+  - PRC-002..004 selesai. `pricingEngine.ts` murni dan bisa diuji tanpa database; `pricingRepository.ts`
+    memegang query aturan, grup, anggota, dan quote. Diskon tidak ditumpuk per baris: engine memilih
+    satu aturan terbaik (persentase terbesar, lalu priority, lalu nama, lalu id) supaya hasil quote
+    deterministik.
+  - `roundMoney` memakai pergeseran desimal lewat bentuk string (`Number(`${value}e2`)`) sehingga
+    1.005 menjadi 1.01. Versi `Math.round(value * 100)` mengembalikan 1 karena float biner sedikit di
+    bawah 100.5. Test `roundMoney clamps invalid input to zero and keeps two decimals` menangkap ini.
+  - `validatePricingRuleInput` menambah cek generik `percentOff harus antara 0 dan 100` untuk PATCH
+    yang membawa persentase tanpa `type`. Untuk `dynamic` dan `customer_group`, pesan spesifik tipe
+    tetap dipakai supaya tidak muncul dua error untuk satu angka.
+  - Identitas pembeli untuk quote hanya dari bearer token. Body tidak punya field grup, jadi pembeli
+    tidak bisa mengaku anggota grup grosir. Token tidak valid dianggap anonim, bukan `401`.
+  - Harga varian menang atas `products.basePrice`. Pada pembuatan order, varian yang bukan milik
+    produk ditolak `PRODUCT_VARIANT_NOT_FOUND`.
+  - Hook `orderCreateService.createOrderWithItems` membaca aturan dan grup sekali per order lalu
+    menyimpan snapshot `pricing`. Kegagalan baca aturan atau grup hanya warning, order jatuh ke harga
+    katalog, karena pricing tidak boleh memblokir penjualan.
+  - CMS-005 selesai. `bannerExperimentService.ts` memakai hash FNV-1a `sessionId + bannerId` sehingga
+    penugasan varian deterministik tanpa menyimpan sesi. Tanpa `sessionId`, resolver mengembalikan
+    varian kontrol supaya banner tidak kosong.
+  - Pemenang A/B dihitung dari CTR dengan ambang `minViews` (default 100). Minimal dua varian harus
+    melewati ambang. Tie-break klik, lalu view, lalu `variantId`, jadi laporan yang dijalankan ulang
+    tidak membalik hasil.
+  - Hanya satu varian kontrol per banner. Menandai varian baru sebagai kontrol otomatis menurunkan
+    kontrol lama.
+  - Rekap `TASK-CHECKLIST.md` naik dari 159 ke 161 DONE, dari 28 ke 26 BELUM, total tetap 192.
+
+Catatan:
+  - Angka kebijakan pricing (zona waktu dynamic, batas tier wholesale, definisi customer group) dan
+    metrik pemenang A/B tetap milik brand. Kode memakai default aman dan menerima angka itu sebagai
+    data, bukan hardcode.
+  - Tabel `pricing_rules`, `customer_groups`, `customer_group_members`, `banner_variants`, dan
+    `banner_experiments` baru punya file `drizzle/0017_pricing_engine.sql` dan
+    `drizzle/0018_banner_ab.sql`, belum masuk `drizzle/meta/_journal.json`. Jalur de facto tetap
+    `npm run db:push`.
+  - DDL `0017` dan `0018` belum diterapkan ke database mana pun karena Postgres lokal masih menolak
+    login. Bukti blok ini adalah type check dan unit test, bukan smoke berbasis data.
+  - Baseline sebelum blok ini 777 test. Kenaikan 29 test berasal dari `pricingEngine.test.ts` (13)
+    dan `bannerExperiment.test.ts` (16).

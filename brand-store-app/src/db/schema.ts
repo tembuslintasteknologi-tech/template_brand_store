@@ -264,6 +264,8 @@ export const banners = pgTable('banners', {
 export const bannerEvents = pgTable('banner_events', {
   id: uuid('id').primaryKey().defaultRandom(),
   bannerId: uuid('banner_id').notNull().references(() => banners.id, { onDelete: 'cascade' }),
+  // CMS-005: null means the event was recorded against the banner itself, not an A/B variant.
+  variantId: uuid('variant_id').references(() => bannerVariants.id, { onDelete: 'set null' }),
   eventType: varchar('event_type', { length: 20 }).notNull(), // 'view' | 'click'
   audience: varchar('audience', { length: 50 }).notNull().default('guest'), // 'guest' | 'customer'
   sessionId: varchar('session_id', { length: 100 }),
@@ -271,7 +273,46 @@ export const bannerEvents = pgTable('banner_events', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => ({
   bannerEventIdx: index('banner_events_lookup_idx').on(table.bannerId, table.eventType, table.createdAt),
+  variantEventIdx: index('banner_events_variant_idx').on(table.variantId, table.eventType),
   eventTimeIdx: index('banner_events_time_idx').on(table.createdAt),
+}));
+
+// ---------------------------------------------------------------------------
+// BANNER A/B TESTING (CMS-005)
+// ---------------------------------------------------------------------------
+//
+// A banner keeps its own fields as the control creative. Variants are alternate creatives for
+// the same slot, and the experiment row decides which of them is eligible for assignment.
+export const bannerVariants = pgTable('banner_variants', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  bannerId: uuid('banner_id').notNull().references(() => banners.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 80 }).notNull(),
+  imageUrl: text('image_url').notNull(),
+  linkUrl: text('link_url'),
+  // Relative traffic share. Integer so two variants can still split 50/50 without rounding drift.
+  weight: integer('weight').notNull().default(50),
+  isControl: boolean('is_control').notNull().default(false),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  bannerIdx: index('banner_variants_banner_idx').on(table.bannerId),
+  bannerNameUidx: uniqueIndex('banner_variants_banner_name_uidx').on(table.bannerId, table.name),
+}));
+
+export const bannerExperiments = pgTable('banner_experiments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  bannerId: uuid('banner_id').notNull().references(() => banners.id, { onDelete: 'cascade' }).unique(),
+  status: varchar('status', { length: 20 }).notNull().default('draft'), // 'draft' | 'running' | 'stopped'
+  // Minimum impressions per variant before a winner is allowed to be applied.
+  minViews: integer('min_views').notNull().default(100),
+  winnerVariantId: uuid('winner_variant_id').references(() => bannerVariants.id, { onDelete: 'set null' }),
+  startedAt: timestamp('started_at'),
+  endedAt: timestamp('ended_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  statusIdx: index('banner_experiments_status_idx').on(table.status),
 }));
 
 export const pages = pgTable('pages', {
@@ -930,4 +971,60 @@ export const adminPermissionGrants = pgTable('admin_permission_grants', {
     table.permission
   ),
   userIdx: index('admin_permission_grants_user_idx').on(table.userId),
+}));
+
+// ---------------------------------------------------------------------------
+// PRICING ENGINE (PRC-002, PRC-003, PRC-004)
+// ---------------------------------------------------------------------------
+//
+// Three tables: the rule itself, the customer groups used by `customer_group` rules, and the
+// membership rows. Rules never stack (see `pricingEngine.ts`), so a product can carry several
+// rows and still resolve to exactly one price per quote.
+export const pricingRules = pgTable('pricing_rules', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 150 }).notNull(),
+  type: varchar('type', { length: 30 }).notNull().default('dynamic'), // 'dynamic' | 'tiered' | 'customer_group'
+  percentOff: decimal('percent_off', { precision: 5, scale: 2 }),
+  // Only for `tiered`: [{ minQuantity, percentOff }] sorted ascending in the admin form.
+  tiers: jsonb('tiers').default([]),
+  // Only for `customer_group`, stores the group slug so a rename does not orphan the rule.
+  customerGroup: varchar('customer_group', { length: 80 }),
+  productId: uuid('product_id').references(() => products.id, { onDelete: 'set null' }),
+  variantId: uuid('variant_id').references(() => productVariants.id, { onDelete: 'set null' }),
+  categoryId: uuid('category_id').references(() => categories.id, { onDelete: 'set null' }),
+  priority: integer('priority').notNull().default(0),
+  isActive: boolean('is_active').notNull().default(true),
+  startAt: timestamp('start_at'),
+  endAt: timestamp('end_at'),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  typeIdx: index('pricing_rules_type_idx').on(table.type),
+  activeIdx: index('pricing_rules_active_idx').on(table.isActive, table.startAt, table.endAt),
+  productIdx: index('pricing_rules_product_idx').on(table.productId),
+  categoryIdx: index('pricing_rules_category_idx').on(table.categoryId),
+  groupIdx: index('pricing_rules_group_idx').on(table.customerGroup),
+}));
+
+export const customerGroups = pgTable('customer_groups', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  slug: varchar('slug', { length: 80 }).notNull().unique(),
+  name: varchar('name', { length: 150 }).notNull(),
+  description: text('description'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  slugIdx: index('customer_groups_slug_idx').on(table.slug),
+}));
+
+export const customerGroupMembers = pgTable('customer_group_members', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  groupId: uuid('group_id').notNull().references(() => customerGroups.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  groupUserUidx: uniqueIndex('customer_group_members_group_user_uidx').on(table.groupId, table.userId),
+  userIdx: index('customer_group_members_user_idx').on(table.userId),
 }));

@@ -19,6 +19,17 @@ import {
   listPublicPages,
   updatePage,
 } from '../services/content/pageService.js';
+import {
+  applyExperimentWinner,
+  createBannerVariant,
+  deleteBannerVariant,
+  getBannerExperiment,
+  getBannerExperimentReport,
+  listBannerVariants,
+  resolvePublicBannerVariant,
+  setBannerExperiment,
+  updateBannerVariant,
+} from '../services/content/bannerExperimentService.js';
 
 export const contentPublicRoutes = new Hono();
 
@@ -71,6 +82,21 @@ contentPublicRoutes.post('/banners/:id/events', async (c) => {
       return c.json({ success: false, error: err.message }, err.status as any);
     }
     console.error('[banner-event]', err?.message);
+    return c.json({ success: false, error: 'failed' }, 500);
+  }
+});
+
+// GET /api/v1/banners/:id/variant - assigned A/B creative for this session (CMS-005)
+contentPublicRoutes.get('/banners/:id/variant', async (c) => {
+  try {
+    const sessionId = c.req.query('sessionId') ?? null;
+    const result = await resolvePublicBannerVariant(c.req.param('id') as string, sessionId);
+    return c.json({ success: true, data: result });
+  } catch (err: any) {
+    if (err instanceof ContentError) {
+      return c.json({ success: false, error: err.message }, err.status as any);
+    }
+    console.error('[banner-variant]', err?.message);
     return c.json({ success: false, error: 'failed' }, 500);
   }
 });
@@ -172,6 +198,102 @@ contentAdminRoutes.delete('/banners/:id', async (c) => {
   try {
     const row = await deleteBanner(actorId(c), c.req.param('id') as string);
     return c.json({ success: true, data: row });
+  } catch (err: any) {
+    return fail(c, err);
+  }
+});
+
+// GET /api/v1/admin/banners/:id/variants - A/B creatives for one banner (CMS-005)
+contentAdminRoutes.get('/banners/:id/variants', async (c) => {
+  try {
+    const rows = await listBannerVariants(c.req.param('id') as string);
+    return c.json({ success: true, data: { variants: rows, count: rows.length } });
+  } catch (err: any) {
+    return fail(c, err);
+  }
+});
+
+// POST /api/v1/admin/banners/:id/variants - add a creative
+contentAdminRoutes.post('/banners/:id/variants', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const row = await createBannerVariant(actorId(c), c.req.param('id') as string, body);
+    return c.json({ success: true, data: row }, 201);
+  } catch (err: any) {
+    return fail(c, err);
+  }
+});
+
+// PATCH /api/v1/admin/banners/:id/variants/:variantId - edit weight, creative, control flag
+contentAdminRoutes.patch('/banners/:id/variants/:variantId', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const row = await updateBannerVariant(
+      actorId(c),
+      c.req.param('id') as string,
+      c.req.param('variantId') as string,
+      body
+    );
+    return c.json({ success: true, data: row });
+  } catch (err: any) {
+    return fail(c, err);
+  }
+});
+
+// DELETE /api/v1/admin/banners/:id/variants/:variantId
+contentAdminRoutes.delete('/banners/:id/variants/:variantId', async (c) => {
+  try {
+    const row = await deleteBannerVariant(
+      actorId(c),
+      c.req.param('id') as string,
+      c.req.param('variantId') as string
+    );
+    return c.json({ success: true, data: row });
+  } catch (err: any) {
+    return fail(c, err);
+  }
+});
+
+// GET /api/v1/admin/banners/:id/experiment - settings plus split CTR and winner suggestion
+contentAdminRoutes.get('/banners/:id/experiment', async (c) => {
+  try {
+    const parseDate = (raw: string | undefined, label: string) => {
+      if (!raw) return undefined;
+      const date = new Date(raw);
+      if (Number.isNaN(date.getTime())) throw new ContentError(`${label} bukan tanggal valid`);
+      return date;
+    };
+    const report = await getBannerExperimentReport(c.req.param('id') as string, {
+      from: parseDate(c.req.query('from'), 'from'),
+      to: parseDate(c.req.query('to'), 'to'),
+    });
+    return c.json({ success: true, data: report });
+  } catch (err: any) {
+    return fail(c, err);
+  }
+});
+
+// PUT /api/v1/admin/banners/:id/experiment - create or update the experiment row
+contentAdminRoutes.put('/banners/:id/experiment', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const row = await setBannerExperiment(actorId(c), c.req.param('id') as string, body);
+    return c.json({ success: true, data: row });
+  } catch (err: any) {
+    return fail(c, err);
+  }
+});
+
+// POST /api/v1/admin/banners/:id/experiment/apply - promote a variant into the banner
+contentAdminRoutes.post('/banners/:id/experiment/apply', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const result = await applyExperimentWinner(
+      actorId(c),
+      c.req.param('id') as string,
+      body?.variantId ? String(body.variantId) : null
+    );
+    return c.json({ success: true, data: result });
   } catch (err: any) {
     return fail(c, err);
   }

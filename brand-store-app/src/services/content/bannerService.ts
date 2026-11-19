@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { db } from '../../db/index.js';
-import { bannerEvents, banners } from '../../db/schema.js';
+import { bannerEvents, bannerVariants, banners } from '../../db/schema.js';
 import { and, asc, eq, gte, lte } from 'drizzle-orm';
 import { recordAdminAction } from '../admin/auditLog.js';
 
@@ -34,6 +34,8 @@ export const bannerSchema = z.object({
 export const bannerEventSchema = z.object({
   type: z.enum(BANNER_EVENT_TYPES),
   sessionId: z.string().min(1).max(100).optional(),
+  // CMS-005: when present the event belongs to one A/B variant, not to the banner aggregate.
+  variantId: z.string().uuid().optional(),
 });
 
 function normalizeAudience(value: unknown): BannerAudience {
@@ -260,10 +262,25 @@ export async function recordBannerEvent(
     throw new ContentError(`Banner tidak ditemukan: ${bannerId}`, 404);
   }
 
+  // A variant id must belong to this banner, otherwise a typo would credit another campaign.
+  let variantId: string | null = null;
+  if (parsed.data.variantId) {
+    const [variant] = await db
+      .select({ id: bannerVariants.id })
+      .from(bannerVariants)
+      .where(and(eq(bannerVariants.id, parsed.data.variantId as any), eq(bannerVariants.bannerId, banner.id as any)))
+      .limit(1);
+    if (!variant) {
+      throw new ContentError(`Varian bukan milik banner ini: ${parsed.data.variantId}`, 404);
+    }
+    variantId = variant.id;
+  }
+
   const [row] = await db
     .insert(bannerEvents)
     .values({
       bannerId: banner.id,
+      variantId,
       eventType: parsed.data.type,
       audience: viewer.audience,
       sessionId: parsed.data.sessionId ?? null,
@@ -271,7 +288,13 @@ export async function recordBannerEvent(
     })
     .returning();
 
-  return { id: row.id, bannerId: row.bannerId, type: row.eventType, createdAt: row.createdAt };
+  return {
+    id: row.id,
+    bannerId: row.bannerId,
+    variantId: row.variantId,
+    type: row.eventType,
+    createdAt: row.createdAt,
+  };
 }
 
 export interface BannerAnalyticsRow extends BannerMetrics {

@@ -685,3 +685,202 @@ mengembalikan scope yang sudah dicabut.
 - Tabel `admin_permission_grants` baru punya file SQL `drizzle/0016_admin_permissions.sql` dan belum
   masuk `drizzle/meta/_journal.json`. Jalur de facto tetap `npm run db:push`.
 
+## Pricing Engine: Dynamic, Tiered, Customer Group (PRC-002, PRC-003, PRC-004)
+
+Tiga jenis aturan harga yang dihitung di server. Klien tidak pernah mengirim harga final; ia hanya
+mengirim produk, varian, dan kuantitas, lalu server yang menentukan harga per baris.
+
+- `dynamic`: persentase potongan yang berlaku di antara `startAt` dan `endAt`.
+- `tiered`: potongan bertingkat berdasarkan kuantitas. Tier dengan `minQuantity` tertinggi yang
+  tercapai menang, bukan penjumlahan antar tier.
+- `customer_group`: persentase potongan untuk anggota grup tertentu (`customerGroups.slug`).
+
+Satu baris hanya memakai satu aturan. Kalau beberapa aturan cocok, engine memilih yang terbaik
+dengan urutan: persentase terbesar, lalu `priority` terbesar, lalu nama, lalu id. Diskon tidak
+ditumpuk, sehingga hasil quote sama setiap kali diulang dengan data yang sama.
+
+Harga dasar per baris diambil dari `product_variants.price` bila `variantId` dikirim dan varian itu
+milik produk tersebut. Kalau tidak, dipakai `products.basePrice`. Pada pembuatan order, varian yang
+bukan milik produk ditolak dengan `PRODUCT_VARIANT_NOT_FOUND` supaya harga tidak bisa diakali dengan
+menukar `variantId`.
+
+Pricing tidak boleh memblokir penjualan. Saat order dibuat, kegagalan membaca aturan atau grup hanya
+dicatat sebagai warning dan order lanjut dengan harga katalog. Yang tetap tegas adalah produk tidak
+ditemukan (quote gagal `404`) dan kuantitas tidak valid (`400`).
+
+### Endpoint publik
+
+`POST /api/v1/pricing/quote`
+
+Body:
+
+```json
+{
+  "lines": [
+    { "productId": "uuid-produk", "variantId": "uuid-varian", "quantity": 3 }
+  ]
+}
+```
+
+`variantId` opsional. `Authorization: Bearer <token>` opsional; kalau ada dan valid, grup pelanggan
+diambil dari token. Grup tidak pernah dibaca dari body, jadi pembeli tidak bisa mengaku sebagai
+anggota grup grosir. Token tidak valid diperlakukan sebagai anonim, bukan `401`, supaya halaman
+katalog publik tetap bisa menampilkan harga.
+
+Respons:
+
+```json
+{
+  "success": true,
+  "data": {
+    "lines": [
+      {
+        "productId": "uuid-produk",
+        "variantId": "uuid-varian",
+        "quantity": 3,
+        "basePrice": 100000,
+        "unitPrice": 90000,
+        "lineTotal": 270000,
+        "discountPerUnit": 10000,
+        "discountTotal": 30000,
+        "appliedRule": { "id": "uuid-aturan", "name": "Grosir 3+", "type": "tiered", "percentOff": 10 },
+        "rejectedRules": [{ "id": "uuid-lain", "name": "Flash sale", "reason": "EXPIRED" }]
+      }
+    ],
+    "baseSubtotal": 300000,
+    "itemsTotal": 270000,
+    "discountTotal": 30000,
+    "customerGroups": ["grosir"]
+  }
+}
+```
+
+`rejectedRules` berguna untuk menelusuri kenapa sebuah promo tidak terpakai. Alasan yang mungkin:
+`INACTIVE`, `NOT_STARTED`, `EXPIRED`, `OUT_OF_SCOPE`, `INVALID_RULE`.
+
+### Endpoint admin
+
+Seluruh route di bawah berada di grup `/api/v1/admin` sehingga butuh role `admin`.
+
+| Method | Path | Scope | Keterangan |
+| --- | --- | --- | --- |
+| `GET` | `/pricing/rules` | `promos.view` | Semua aturan, termasuk yang nonaktif |
+| `POST` | `/pricing/rules` | `promos.manage` | Buat aturan baru |
+| `PATCH` | `/pricing/rules/{id}` | `promos.manage` | Ubah sebagian field |
+| `DELETE` | `/pricing/rules/{id}` | `promos.manage` | Hapus aturan |
+| `GET` | `/pricing/groups` | `promos.view` | Daftar grup pelanggan |
+| `POST` | `/pricing/groups` | `promos.manage` | Buat grup (`slug`, `name`, `description`) |
+| `PATCH` | `/pricing/groups/{id}` | `promos.manage` | Ubah grup |
+| `DELETE` | `/pricing/groups/{id}` | `promos.manage` | Hapus grup |
+| `GET` | `/pricing/groups/{id}/members` | `promos.view` | Anggota grup |
+| `POST` | `/pricing/groups/{id}/members` | `promos.manage` | Tambah anggota, body `{ "userId": "..." }` |
+| `DELETE` | `/pricing/groups/{id}/members/{userId}` | `promos.manage` | Keluarkan anggota |
+
+Body aturan:
+
+```json
+{
+  "name": "Grosir 3+",
+  "type": "tiered",
+  "tiers": [
+    { "minQuantity": 3, "percentOff": 10 },
+    { "minQuantity": 12, "percentOff": 15 }
+  ],
+  "productId": null,
+  "categoryId": null,
+  "priority": 10,
+  "isActive": true
+}
+```
+
+`PATCH` hanya memvalidasi field yang dikirim, tetapi tetap digabung dengan nilai lama sebelum
+disimpan. Karena itu `PATCH { "type": "dynamic" }` pada aturan lama yang belum punya persentase
+ditolak dengan pesan `percentOff wajib diisi antara 0 dan 100 untuk dynamic`. Persentase di luar
+rentang 0 sampai 100 selalu ditolak.
+
+### Tabel error
+
+| HTTP | Pesan | Arti |
+| --- | --- | --- |
+| 400 | `lines wajib berisi minimal satu item` | Body quote kosong |
+| 400 | `Quantity tidak valid untuk produk ...` | Kuantitas bukan bilangan bulat positif |
+| 400 | `Aturan harga tidak valid: ...` | Validasi cross field gagal |
+| 400 | `Slug grup harus huruf kecil, angka, tanda hubung, atau garis bawah (2-80 karakter)` | Slug grup tidak valid |
+| 404 | `Produk tidak ditemukan: ...` | `productId` tidak ada di katalog |
+| 404 | `Aturan harga tidak ditemukan: ...` | Id aturan salah |
+| 404 | `Grup tidak ditemukan: ...` | Id grup salah |
+
+### Keputusan yang masih terbuka
+
+- Angka kebijakan tetap milik brand: zona waktu untuk aturan `dynamic`, batas kuantitas untuk tier
+  wholesale, dan definisi grup pelanggan. Kode tidak mengunci angka apa pun, semuanya data aturan.
+- Tabel `pricing_rules`, `customer_groups`, dan `customer_group_members` punya file SQL
+  `drizzle/0017_pricing_engine.sql` dan belum masuk `drizzle/meta/_journal.json`. Jalur de facto
+  tetap `npm run db:push`.
+- Quote menerima `basePrice` opsional untuk pemakaian internal. Route publik tidak meneruskan field
+  itu, jadi klien tidak bisa menetapkan harganya sendiri.
+
+## A/B Testing Banner (CMS-005)
+
+Eksperimen kreatif banner. Setiap banner bisa punya beberapa varian, satu di antaranya ditandai
+`isControl` sebagai fallback.
+
+Penugasan varian deterministik: hash FNV-1a dari `sessionId + bannerId` dipetakan ke rentang bobot
+varian aktif. Pengunjung yang sama selalu mendapat varian yang sama tanpa perlu menyimpan sesi, dan
+tanpa `sessionId` resolver mengembalikan varian kontrol supaya banner tidak pernah kosong.
+
+Pemenang dihitung dari CTR (klik dibagi view) dengan ambang `minViews` per eksperimen. Minimal dua
+varian harus melewati ambang sebelum pemenang diumumkan. Tie-break: klik, lalu view, lalu
+`variantId`, sehingga laporan yang dijalankan ulang tidak membalik hasil.
+
+### Endpoint publik
+
+`GET /api/v1/banners/{id}/variant?sessionId=<id-sesi>`
+
+```json
+{
+  "success": true,
+  "data": {
+    "bannerId": "uuid-banner",
+    "variant": {
+      "id": "uuid-varian",
+      "name": "Versi B",
+      "imageUrl": "https://cdn.example.com/b.jpg",
+      "linkUrl": "https://toko.example.com/promo",
+      "isControl": false
+    },
+    "fallback": false
+  }
+}
+```
+
+`fallback: true` dan `variant: null` dikembalikan kalau banner tidak ada, tidak sedang tayang, atau
+eksperimennya belum berjalan. Klien disarankan memakai banner utama saat `fallback` bernilai `true`.
+
+### Endpoint admin
+
+| Method | Path | Keterangan |
+| --- | --- | --- |
+| `GET` | `/banners/{id}/variants` | Daftar varian |
+| `POST` | `/banners/{id}/variants` | Tambah varian (`name`, `imageUrl`, `linkUrl`, `weight`, `isControl`, `isActive`) |
+| `PATCH` | `/banners/{id}/variants/{variantId}` | Ubah sebagian field |
+| `DELETE` | `/banners/{id}/variants/{variantId}` | Hapus varian |
+| `GET` | `/banners/{id}/experiment?from=&to=` | Setelan eksperimen plus CTR per varian dan saran pemenang |
+| `PUT` | `/banners/{id}/experiment` | Buat atau ubah eksperimen (`status`, `minViews`, `winnerVariantId`) |
+| `POST` | `/banners/{id}/experiment/apply` | Terapkan pemenang ke banner, body opsional `{ "variantId": "..." }` |
+
+Hanya satu varian kontrol per banner. Menandai varian baru sebagai kontrol otomatis menurunkan
+kontrol lama, sehingga fallback tetap tunggal dan tidak ambigu.
+
+Eksperimen `running` yang berjalan akan dipakai resolver publik. Status lain membuat resolver
+kembali ke banner utama.
+
+### Keputusan yang masih terbuka
+
+- Metrik pemenang final (CTR klik atau konversi order) tetap keputusan brand. Kode memakai CTR
+  dengan `minViews` default 100, dan ambang itu bisa diubah per eksperimen.
+- Tabel `banner_variants` dan `banner_experiments` plus kolom `banner_events.variant_id` punya file
+  SQL `drizzle/0018_banner_ab.sql` dan belum masuk `drizzle/meta/_journal.json`. Jalur de facto
+  tetap `npm run db:push`.
+- Belum ada pembobotan otomatis (multi-armed bandit). Bobot masih diatur manual per varian.
+

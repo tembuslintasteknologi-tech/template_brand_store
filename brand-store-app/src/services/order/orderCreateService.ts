@@ -11,9 +11,11 @@
  */
 
 import { db } from '../../db/index.js';
-import { orderItems, orders, products } from '../../db/schema.js';
-import { eq } from 'drizzle-orm';
+import { orderItems, orders, products, productVariants } from '../../db/schema.js';
+import { eq, and } from 'drizzle-orm';
 import { notifyOrderEvent } from '../notifications/orderNotifications.js';
+import { getCustomerGroupSlugs, listActivePricingRules } from '../pricing/pricingRepository.js';
+import { resolveLinePrice, type PricingRule } from '../pricing/pricingEngine.js';
 import {
   OrderSourceError,
   assertBranchCanFulfill,
@@ -29,6 +31,7 @@ import {
 
 export interface CreateOrderItemInput {
   productId: string;
+  variantId?: string | null;
   quantity: number;
   branchId?: string | null;
   fulfillmentMode?: string | null;
@@ -60,6 +63,7 @@ export interface CreateOrderInput {
 
 export interface CreatedOrderItem {
   productId: string;
+  variantId: string | null;
   sourceBranchId: string | null;
   fulfillmentMode: string | null;
   quantity: number;
@@ -110,6 +114,17 @@ export async function createOrderWithItems(input: CreateOrderInput): Promise<Cre
   // shipment group while OD-A is open.
   const modeOverride = input.shipping?.mode ?? null;
 
+  // Rules and groups are read once per order. A failure here must never block a sale, so the
+  // order falls back to catalog prices instead of returning a 500 from the pricing module.
+  let pricingRules: PricingRule[] = [];
+  let customerGroups: string[] = [];
+  try {
+    pricingRules = await listActivePricingRules();
+    customerGroups = await getCustomerGroupSlugs(input.customerId);
+  } catch (err: any) {
+    console.warn('[order-create] pricing unavailable, using catalog prices:', err?.message);
+  }
+
   let itemsTotal = 0;
   const drafts: CreatedOrderItem[] = [];
 
@@ -147,20 +162,64 @@ export async function createOrderWithItems(input: CreateOrderInput): Promise<Cre
       );
     }
 
-    const unitPrice = parseFloat(product.basePrice);
-    const lineTotal = unitPrice * item.quantity;
+    let basePrice = parseFloat(product.basePrice);
+
+    // PRC-002: a variant price wins over the product base price. A variant that does not belong
+    // to this product is rejected instead of quietly charging the wrong SKU.
+    if (item.variantId) {
+      const [variant] = await db
+        .select()
+        .from(productVariants)
+        .where(and(eq(productVariants.id, item.variantId as any), eq(productVariants.productId, product.id)))
+        .limit(1);
+
+      if (!variant) {
+        throw new OrderSourceError(
+          'PRODUCT_VARIANT_NOT_FOUND',
+          `Varian tidak ditemukan untuk produk ${product.title}: ${item.variantId}`,
+          400
+        );
+      }
+      basePrice = parseFloat(variant.price);
+    }
+
+    // PRC-003 and PRC-004: tiered and group rules are resolved by the pure engine, one winner
+    // per line. The applied rule is frozen into the snapshot so support can explain the price.
+    const priced = resolveLinePrice(
+      basePrice,
+      {
+        productId: product.id,
+        variantId: item.variantId ?? null,
+        categoryId: product.categoryId ?? null,
+        quantity: item.quantity,
+        customerGroups,
+      },
+      pricingRules
+    );
+
+    const unitPrice = priced.unitPrice;
+    const lineTotal = priced.lineTotal;
     itemsTotal += lineTotal;
 
     drafts.push({
       productId: product.id,
+      variantId: item.variantId ?? null,
       sourceBranchId,
       fulfillmentMode,
       quantity: item.quantity,
       unitPrice: money(unitPrice),
       totalPrice: money(lineTotal),
-      productSnapshot: branchSnapshot
-        ? { title: product.title, sku: product.sku, branch: branchSnapshot }
-        : { title: product.title, sku: product.sku },
+      productSnapshot: {
+        title: product.title,
+        sku: product.sku,
+        pricing: {
+          basePrice: priced.basePrice,
+          unitPrice: priced.unitPrice,
+          discountTotal: priced.discountTotal,
+          appliedRule: priced.appliedRule,
+        },
+        ...(branchSnapshot ? { branch: branchSnapshot } : {}),
+      },
     });
   }
 

@@ -28,6 +28,8 @@ export const productSchema = z.object({
 export const orderSchema = z.object({
   items: z.array(z.object({
     productId: z.string().uuid(),
+    // PRC-002: an optional variant picks the SKU price instead of the product base price.
+    variantId: z.string().uuid().optional(),
     quantity: z.number().int().positive(),
     // BR-009: cart items carry the branch the customer picked. Absent means the legacy pusat
     // pool, which keeps old clients working until the storefront always sends a branch.

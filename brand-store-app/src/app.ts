@@ -12,6 +12,7 @@ import {
 } from './middleware/security.js';
 import { requestLogger } from './middleware/logging.js';
 import { metricsMiddleware } from './middleware/metrics.js';
+import { tracingMiddleware } from './middleware/tracing.js';
 import { metricsRoutes } from './routes/metrics.js';
 import { maintenanceMiddleware } from './middleware/maintenance.js';
 import { authRoutes } from './routes/auth.js';
@@ -97,6 +98,9 @@ export async function buildHealthReport(): Promise<HealthReport> {
 export function createApp() {
   const app = new Hono();
 
+  // Tracing dipasang sebelum middleware lain: span harus sudah terbuka ketika correlation ID,
+  // metrik, dan logger menulis, dan trace ID harus tersedia untuk route.
+  app.use('*', tracingMiddleware());
   app.use('*', correlationIdMiddleware());
   app.use('*', maintenanceMiddleware());
   app.use('*', metricsMiddleware());
@@ -106,8 +110,14 @@ export function createApp() {
     cors({
       origin: unifiedConfig.cors.origin,
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowHeaders: ['Content-Type', 'Authorization', 'x-correlation-id'],
-      exposeHeaders: ['x-correlation-id', 'X-RateLimit-Limit', 'X-RateLimit-Remaining'],
+      allowHeaders: ['Content-Type', 'Authorization', 'x-correlation-id', 'traceparent'],
+      exposeHeaders: [
+        'x-correlation-id',
+        'x-trace-id',
+        'traceparent',
+        'X-RateLimit-Limit',
+        'X-RateLimit-Remaining',
+      ],
     })
   );
   app.use('*', requestLogger());

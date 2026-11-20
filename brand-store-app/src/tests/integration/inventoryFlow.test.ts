@@ -4,7 +4,7 @@ import * as inventoryService from '../../services/inventoryService.js';
 import * as dbModule from '../../db/index.js';
 
 test('Integration Suite: Inventory Operations Lifecycle', async (t) => {
-  let mockRecord = {
+  const mockRecord = {
     id: 'int-var-1',
     productId: 'int-prod-1',
     stock: 50,

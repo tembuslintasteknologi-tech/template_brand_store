@@ -14,5 +14,9 @@ declare module 'hono' {
       scope: 'pusat' | 'branch';
     };
     requestId: string;
+    /** Trace ID W3C dari span server aktif, dipakai untuk korelasi log. */
+    traceId: string;
+    /** Span ID W3C dari span server aktif. */
+    spanId: string;
   }
 }

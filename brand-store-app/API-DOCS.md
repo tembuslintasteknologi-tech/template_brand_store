@@ -1106,3 +1106,16 @@ Contoh potongan respons `GET /metrics`:
 Ambang alert bisa diubah lewat `ALERT_ERROR_RATE`, `ALERT_P95_LATENCY_MS`,
 `ALERT_MEMORY_USED_PERCENT`, dan `ALERT_MIN_SAMPLES`. Nilai default dan runbook ada di
 `docs/OPERATIONS.md`.
+
+### Tracing header
+
+Setiap response API membawa dua header korelasi:
+
+| Header | Isi |
+| --- | --- |
+| `x-trace-id` | trace ID W3C, 32 karakter hex |
+| `traceparent` | `00-<trace-id>-<span-id>-<flags>` |
+
+Kirim `traceparent` dari gateway bila ada; server memakai trace yang sama. Header yang tidak valid
+diabaikan, bukan ditolak. Lampirkan `x-trace-id` saat melaporkan bug atau mencari log. Detail env dan
+cara menjalankan Jaeger ada di `docs/OPERATIONS.md`.

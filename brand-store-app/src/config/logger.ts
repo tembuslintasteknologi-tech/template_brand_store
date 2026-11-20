@@ -20,9 +20,12 @@ export const logger = {
  * Satu baris per request. URL diredaksi dulu karena query string sering membawa email,
  * nomor HP, atau token reset yang tidak boleh masuk log aggregator.
  */
-export function logHttpRequest(req: any, res: any, responseTime: number) {
+export function logHttpRequest(req: any, res: any, responseTime: number, traceId?: string) {
   const method = String(req?.method ?? 'GET').toUpperCase();
   const url = redactUrl(String(req?.url ?? ''));
   const status = Number(res?.status ?? 0);
-  console.log(`[HTTP] ${method} ${url} - ${status} (${responseTime}ms)`);
+  // Trace ID ditempel di baris yang sama supaya `grep <trace-id>` di log langsung
+  // menemukan request ini tanpa perlu join ke sistem lain.
+  const trace = traceId ? ` trace=${traceId}` : '';
+  console.log(`[HTTP] ${method} ${url} - ${status} (${responseTime}ms)${trace}`);
 }

@@ -5,7 +5,7 @@ export function requestLogger() {
   return async function requestLog(c: Context, next: Next) {
     const startedAt = Date.now();
     await next();
-    logHttpRequest(c.req, c.res, Date.now() - startedAt);
+    logHttpRequest(c.req, c.res, Date.now() - startedAt, c.get('traceId'));
   };
 }
 

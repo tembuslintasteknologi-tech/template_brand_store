@@ -16,11 +16,44 @@ import { unifiedConfig } from './config/unifiedConfig.js';
 import { app } from './app.js';
 import { runRecoveryScan } from './services/cart/cartPersistence.js';
 import { loadAbandonmentPolicy, loadRecoveryBaseUrl } from './routes/cart.js';
+import {
+  initTracing,
+  isTracingInitialized,
+  shutdownTracing,
+} from './services/observability/tracing.js';
+
+// Provider dibuat sebelum request pertama. Tanpa `OTEL_ENABLED=true` span tetap dibuat untuk
+// korelasi log, tetapi tidak dikirim ke collector.
+initTracing();
+console.log(
+  `Tracing siap (service=${process.env.OTEL_SERVICE_NAME ?? 'brand-store-api'}, export=${
+    process.env.OTEL_ENABLED === 'true' ? 'otlp' : 'nonaktif'
+  })`
+);
 
 export default {
   port: unifiedConfig.port,
   fetch: app.fetch,
 };
+
+/**
+ * Flush span yang masih di buffer sebelum proses berhenti. Tanpa ini, trace terakhir hilang
+ * saat container dihentikan oleh orchestrator.
+ */
+async function handleShutdown(signal: string) {
+  console.log(`Menerima ${signal}, menutup tracing`);
+  try {
+    await shutdownTracing();
+  } catch (err: any) {
+    console.error('[tracing] shutdown gagal', { message: err?.message });
+  }
+  process.exit(0);
+}
+
+if (isTracingInitialized()) {
+  process.once('SIGINT', () => void handleShutdown('SIGINT'));
+  process.once('SIGTERM', () => void handleShutdown('SIGTERM'));
+}
 
 console.log(`Brand Store API server running on port ${unifiedConfig.port}`);
 

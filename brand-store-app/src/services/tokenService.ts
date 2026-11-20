@@ -55,7 +55,10 @@ export async function revokeSession(token?: string, refreshToken?: string): Prom
       if (decoded.jti) {
         await redis.set(`revoked:${decoded.jti}`, '1', 'EX', 900);
       }
-    } catch {}
+    } catch {
+      // Token akses sudah kedaluwarsa atau rusak: tidak ada jti yang bisa dicabut,
+      // dan logout tetap harus sukses dari sisi pemanggil.
+    }
   }
   if (refreshToken) {
     try {
@@ -63,7 +66,10 @@ export async function revokeSession(token?: string, refreshToken?: string): Prom
       if (decoded.jti) {
         await redis.set(`revoked:${decoded.jti}`, '1', 'EX', 604800);
       }
-    } catch {}
+    } catch {
+      // Refresh token sudah kedaluwarsa atau rusak: pencabutan best-effort,
+      // bukan alasan untuk menggagalkan logout.
+    }
   }
 }
 

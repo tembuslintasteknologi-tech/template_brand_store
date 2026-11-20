@@ -206,7 +206,7 @@ Backup yang belum pernah direstore belum terbukti. Minimal sebulan sekali:
 
 1. Buka `/metrics/alerts` dan catat sinyal yang menyala.
 2. Error rate tinggi: cek `routes[]` dengan `errorRate` tertinggi, lalu korelasikan dengan log
-   `[HTTP]` memakai `x-correlation-id`.
+   `[HTTP]` memakai `x-correlation-id` atau `trace=<id>` dari header `x-trace-id`.
 3. p95 latency tinggi: cek route paling sibuk, lalu lihat apakah ada query lambat atau Redis down.
    Rate limiter gagal terbuka saat Redis mati, jadi lonjakan traffic bisa terlihat sebagai latensi.
 4. Saturasi heap tinggi: restart proses adalah tindakan sementara. Cari kebocoran (listener, cache
@@ -214,10 +214,57 @@ Backup yang belum pernah direstore belum terbukti. Minimal sebulan sekali:
 5. Setelah pulih, catat penyebab dan tindakan di log insiden. Jangan menurunkan ambang alert hanya
    supaya dashboard hijau.
 
-## 8. Yang belum ada
+## 8. Distributed tracing (OpenTelemetry)
 
-- OpenTelemetry tracing belum dipasang. Butuh paket tambahan dan collector, jadi dicatat sebagai
-  pekerjaan terpisah (`[~]` di checklist).
+Span tracing ada di `src/services/observability/tracing.ts`, middleware di `src/middleware/tracing.ts`.
+Setiap request membuka span server `METHOD /path` dan mengembalikan dua header:
+
+| Header | Isi |
+| --- | --- |
+| `x-trace-id` | 32 karakter hex, trace ID span server |
+| `traceparent` | format W3C `00-<trace-id>-<span-id>-<flags>` |
+
+`traceparent` dari upstream diekstrak lebih dulu, jadi request yang lewat gateway tetap satu trace
+dengan gateway, bukan trace baru. Header yang rusak diabaikan dan diganti trace baru. Trace ID juga
+ditempel di baris log `[HTTP] ... trace=<id>`, jadi satu `grep` cukup untuk melihat semua log request
+itu.
+
+### Environment
+
+| Env | Default | Arti |
+| --- | --- | --- |
+| `OTEL_ENABLED` | `false` | `true` mengaktifkan export span ke collector |
+| `OTEL_SERVICE_NAME` | `brand-store-api` | nilai `service.name` di resource |
+| `OTEL_SERVICE_VERSION` | `2.0.0` | nilai `service.version` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | base URL OTLP HTTP, `/v1/traces` ditambahkan otomatis |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | kosong | override penuh, menang atas base URL |
+| `OTEL_EXPORTER_OTLP_HEADERS` | kosong | header collector, format `key=value,key2=value2` |
+| `OTEL_TRACES_SAMPLER_ARG` | `1` | rasio sampling root span, 0 sampai 1 |
+
+Walau `OTEL_ENABLED=false`, span tetap dibuat tetapi tidak diekspor. Tujuannya supaya `x-trace-id`
+dan korelasi log tetap jalan tanpa collector. Export span menambah biaya CPU dan jaringan, jadi di
+produksi mulai dari rasio sampel kecil (misalnya `0.1`) lalu naikkan bila perlu.
+
+### Jaeger lokal
+
+```powershell
+docker run --rm -p 16686:16686 -p 4318:4318 jaegertracing/all-in-one:latest
+$env:OTEL_ENABLED="true"
+npm run dev
+```
+
+Buka `http://localhost:16686`, pilih service `brand-store-api`, lalu cari trace memakai ID dari
+header `x-trace-id`. Span yang masih di buffer di-flush saat proses menerima `SIGINT` atau `SIGTERM`.
+
+### Batas yang diketahui
+
+- Span hanya menutup level HTTP. Query database dan panggilan HTTP keluar belum diinstrumentasi
+  otomatis, jadi durasi di dalam span masih gabungan.
+- Collector hanya menerima trace. Metrik dan log belum dikirim lewat OTLP; keduanya masih lewat
+  `/metrics` dan stdout.
+
+## 9. Yang belum ada
+
 - Metrik tidak persisten. Kalau butuh histori, scrape ke Prometheus.
 - Backup terjadwal belum aktif sampai job cron atau Task Scheduler dipasang di server brand.
 - Alert belum mengirim notifikasi sendiri.

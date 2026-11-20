@@ -12,27 +12,38 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:seed": "node --import tsx/esm src/db/seed.ts",
+    "lint": "eslint \"src/**/*.ts\"",
     "test": "node --import tsx/esm --test \"src/tests/**/*.test.ts\""
   },
   "dependencies": {
     "@hono/zod-validator": "^0.4.1",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/core": "^1.30.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.57.2",
+    "@opentelemetry/resources": "^1.30.1",
+    "@opentelemetry/sdk-trace-base": "^1.30.1",
+    "@opentelemetry/sdk-trace-node": "^1.30.1",
     "@types/jsonwebtoken": "^9.0.10",
     "argon2": "^0.41.1",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.38.4",
     "hono": "^4.6.14",
+    "ioredis": "^5.11.1",
     "ioredis-mock": "^8.13.1",
     "jsonwebtoken": "^9.0.3",
     "postgres": "^3.4.5",
-    "zod": "^3.24.1",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/bun": "latest",
+    "@types/ws": "^8.5.13",
+    "@typescript/native": "npm:typescript@^7.0.2",
     "drizzle-kit": "^0.30.1",
-    "eslint": "^9.0.0",
+    "eslint": "^9.39.5",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2",
-    "@types/ws": "^8.5.13"
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "typescript-eslint": "^8.73.0"
   }
 }

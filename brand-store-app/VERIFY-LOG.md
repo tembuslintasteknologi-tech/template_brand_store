@@ -2308,3 +2308,137 @@ Catatan:
   - OpenTelemetry belum ditambahkan. Tracing saat ini hanya `requestId` yang ikut di log dan response.
   - Rekap `TASK-CHECKLIST.md` naik dari 162 ke 166 DONE, dari 5 ke 8 PARTIAL, dari 25 ke 18 BELUM, total tetap 192.
   - Metrik in-memory hilang saat proses restart dan tidak agregat lintas instance. Kalau butuh histori, langkah berikutnya adalah exporter Prometheus, bukan menyimpan di proses.
+
+## 2026-11-20 - Gate Lint dan OpenTelemetry Tracing
+
+Dua pekerjaan dalam satu blok karena saling terkait: gate lint dipakai untuk memverifikasi kode tracing.
+
+### 1. Gate lint yang akhirnya berjalan
+
+Akar masalah: `typescript-eslint@8` menolak TypeScript 7.0.2 dengan pesan `typescript-eslint does not support TS 7.0`. Solusinya memasang dua TypeScript berdampingan:
+
+- `typescript` dialias ke `@typescript/typescript6@^6.0.2` supaya parser ESLint mendapat API TS 6.
+- `@typescript/native@7.0.2` tetap dipakai `npx tsc` lewat binary `tsc` yang ada di PATH.
+
+Paket: `eslint@^9.39.5`, `@eslint/js@^9.39.5`, `typescript-eslint@^8.73.0`, `prettier@^3.10.1`.
+
+Command:
+```powershell
+cd brand-store-app
+npm run lint
+```
+Output (ekor):
+```
+  1:10  warning  'Context' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  1:19  warning  'Next' is defined but never used. Allowed unused vars must match /^_/u     @typescript-eslint/no-unused-vars
+
+✖ 29 problems (0 errors, 29 warnings)
+LINT_EXIT=0
+```
+
+Tiga error pertama yang ditemukan gate ini sudah dibereskan:
+- `src/services/tokenService.ts`: dua `catch {}` kosong diberi komentar alasan.
+- `src/tests/integration/inventoryFlow.test.ts`: `let mockRecord` menjadi `const`.
+
+Config `eslint.config.js` memakai `tseslint.config(...)` dengan `no-undef` mati untuk TS (TypeScript sudah menangani scope), `no-explicit-any` mati karena kode ini banyak memakai `any` di batas library, unused vars sebagai warning, dan ignore untuk `dist`, `node_modules`, `drizzle`, `.engram`, `loadtest`, `scripts`.
+
+### 2. OpenTelemetry tracing
+
+File baru:
+- `src/services/observability/tracing.ts`: provider, propagator, sampler, exporter OTLP opsional, `initTracing`, `shutdownTracing`, `getTracer`, `formatTraceparent`, `resolveOtlpTracesUrl`.
+- `src/middleware/tracing.ts`: server span per request, ekstraksi `traceparent` upstream, header response.
+- `src/tests/tracing.test.ts`: 8 test.
+
+Satu keputusan yang perlu dicatat: span tetap dibuat walau `OTEL_ENABLED=false`. Tanpa provider nyata, `trace.getTracer()` mengembalikan noop tracer dan trace ID menjadi `0000...`, sehingga korelasi log mati. Jadi yang dimatikan hanya export, bukan pembuatan span.
+
+Command dan output test:
+```powershell
+node --import tsx/esm --test src/tests/tracing.test.ts
+```
+```
+ok 8 - handler yang melempar error mencatat status ERROR dan exception
+1..8
+# tests 8
+# pass 8
+# fail 0
+# duration_ms 878.1219
+```
+
+Typecheck setelah perubahan tipe di `src/types/hono.d.ts` (`traceId`, `spanId`):
+```powershell
+npx tsc --noEmit
+```
+```
+TSC_EXIT=0
+```
+
+Suite penuh:
+```powershell
+npm test
+```
+```
+1..429
+# tests 861
+# suites 57
+# pass 861
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
+### 3. Smoke runtime nyata
+
+Script sementara `smoke-tracing.ts` (dibuat, dijalankan, lalu dihapus) memanggil `initTracing({ exporter: InMemorySpanExporter })` lalu `app.request('/metrics/alerts')` dengan `traceparent` dari upstream.
+
+Output:
+```
+[HTTP] GET http://localhost/metrics/alerts - 200 (4ms) trace=4bf92f3577b34da6a3ce929d0e0e4736
+SMOKE status = 200
+SMOKE x-trace-id = 4bf92f3577b34da6a3ce929d0e0e4736 / length 32
+SMOKE traceparent = 00-4bf92f3577b34da6a3ce929d0e0e4736-549aa906db129ea2-01
+SMOKE spans = 1
+SMOKE span.name = GET /metrics/alerts
+SMOKE span.kind = 1
+SMOKE span.traceId = 4bf92f3577b34da6a3ce929d0e0e4736
+SMOKE span.parentSpanId = 00f067aa0ba902b7
+SMOKE span.status = 0
+SMOKE span.attrs = {"http.request.method":"GET","url.path":"/metrics/alerts","url.scheme":"http","http.response.status_code":200}
+```
+
+Yang dibuktikan: trace ID upstream dipakai ulang (bukan trace baru), `parentSpanId` sama dengan span upstream, span SERVER (kind 1) tercatat, header keluar di response, dan baris log membawa `trace=`.
+
+### 4. Format
+
+Command:
+```powershell
+npx prettier --check --end-of-line auto src/services/observability/tracing.ts src/middleware/tracing.ts src/tests/tracing.test.ts src/app.ts src/index.ts src/config/logger.ts src/middleware/logging.ts src/types/hono.d.ts eslint.config.js package.json
+```
+```
+Checking formatting...
+All matched files use Prettier code style!
+```
+
+Catatan format:
+- `--end-of-line auto` wajib karena file repo ber-CRLF; `prettier --check` polos selalu gagal walau isinya sudah rapi.
+- `docs/OPERATIONS.md` dan `API-DOCS.md` sudah gagal `prettier --check` sejak sebelum blok ini (diverifikasi dengan `git show HEAD:...` ke file temp). Reformating seluruh dokumen akan mengubah 34 dan 203 baris yang tidak berkaitan, jadi tidak dilakukan supaya diff tetap fokus.
+
+### 5. Dependency yang perlu dijelaskan
+
+`ioredis@^5.11.1` dipasang eksplisit. `ioredis-mock@8.13.1` hanya punya `ioredis` sebagai peer dependency `^5`, dan install `--legacy-peer-deps` sebelumnya memangkasnya sehingga 15 suite gagal dengan `Cannot find module 'ioredis/built/utils/index'`. Setelah dipasang eksplisit, 861 test lulus.
+
+`--legacy-peer-deps` tetap dipakai karena `typescript-eslint` belum mendukung TS 7 sebagai peer range.
+
+### 6. Dokumentasi
+
+- `docs/OPERATIONS.md`: section 8 baru "Distributed tracing (OpenTelemetry)" berisi tabel header, tabel env, cara menjalankan Jaeger lokal, dan batas yang diketahui; section "Yang belum ada" bergeser jadi 9 dan baris OpenTelemetry dihapus dari daftar itu.
+- `API-DOCS.md`: subsection "Tracing header".
+- `.env.example`: blok `OTEL_*` (91-98).
+
+Yang berubah:
+  - `TASK-CHECKLIST.md`: baris OpenTelemetry `[ ]` menjadi `[x]`, catatan item ESLint diperbarui (gate berfungsi, pre-commit hook masih kosong), blok bukti perintah memakai output baru, rekap 167/8/17.
+
+Catatan:
+  - Cakupan span hanya level HTTP. Query database dan HTTP keluar belum diinstrumentasi, jadi durasi di dalam span masih gabungan. Ini dicatat di `docs/OPERATIONS.md` dan di baris checklist.
+  - Span processor memakai `BatchSpanProcessor` di produksi dan `SimpleSpanProcessor` saat exporter disuntik test, sehingga test tidak menunggu flush.
+  - Rekap `TASK-CHECKLIST.md` naik dari 166 ke 167 DONE dan turun dari 18 ke 17 BELUM, total tetap 192.

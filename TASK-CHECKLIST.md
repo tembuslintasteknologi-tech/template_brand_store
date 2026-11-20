@@ -18,7 +18,7 @@ Rekap: lihat bagian **Rekap Progress** di akhir dokumen.
 ### Repo & Tooling
 - [x] Buat repo template (`brand-store-template`)
 - [x] Setup Bun + Hono + TypeScript, struktur folder sesuai Integration Guide §1.3 — Hono + TypeScript + struktur folder lulus `src/tests/structure.test.ts`; Bun tidak terpasang di mesin ini, runtime memakai Node (`@hono/node-server`, `node --import tsx`)
-- [x] Setup ESLint, Prettier, dan pre-commit hook — Prettier lulus (`npx prettier --check` exit 0); **ESLint belum bisa melint file `.ts`**: `npm run lint` exit 2 (`all of the files matching the glob pattern "src/**/*.ts" are ignored`) karena `typescript-eslint` menolak TypeScript 7.0.2 (`typescript-eslint does not support TS 7.0`); pre-commit hook belum dipasang (tidak ada `.husky` / `.git/hooks` aktif)
+- [x] Setup ESLint, Prettier, dan pre-commit hook - Prettier lulus; **gate lint sejak 2026-11-20 berfungsi**: `npm run lint` = `eslint "src/**/*.ts"` exit 0 dengan 29 warning dan 0 error. Akar masalahnya `typescript-eslint@8` menolak TypeScript 7.0.2, jadi dipasang side-by-side: `typescript` dialias ke `@typescript/typescript6` (API TS 6 untuk parser) sementara `@typescript/native` tetap 7.0.2 untuk `npx tsc`. Config `eslint.config.js` memakai `tseslint.config(...)`, `no-undef` dimatikan untuk TS, `no-explicit-any` dimatikan, unused vars jadi warning, dan `dist`/`node_modules`/`drizzle`/`.engram`/`loadtest`/`scripts` di-ignore. Tiga error pertama sudah dibereskan (`tokenService.ts` dua `catch {}` diberi komentar, `inventoryFlow.test.ts` `let` jadi `const`). Pre-commit hook masih belum dipasang (tidak ada `.husky` / `.git/hooks` aktif), jadi bagian itu tetap terbuka. Catatan format: file repo ber-CRLF sehingga `prettier --check` polos selalu gagal; verifikasi format harus `--end-of-line auto`
 - [x] Setup Vitest + struktur `tests/` (unit, integration, e2e, contract, performance) — runner memakai `node:test` (bukan Vitest); hanya unit test di `src/tests/` (12 file, 76 test) + 1 smoke script; folder integration/e2e/contract/performance belum
 - [x] Setup CI (lint, test, build) — .github/workflows/ci.yml sudah dibuat dan aktif
 - [x] Buat Dockerfile dan docker-compose.yml (api, postgres, redis, minio) — Selesai, lengkap dengan minio dan port terverifikasi aman
@@ -275,7 +275,7 @@ Kabar baiknya, sisi logistik sudah siap: `logisticProvider.ts` menerima `origin.
 - [x] CSP header, sanitasi input, proteksi CSRF untuk web - CSP + security header, input sanitization middleware, dan CSRF protection middleware DONE
 - [x] IP allowlist untuk endpoint admin: `adminIpAllowlist` di `src/middleware/security.ts` mendukung CIDR, default kosong = allow all (produksi wajib isi `ADMIN_IP_ALLOWLIST`)
 - [x] Monitoring: four golden signals + alert threshold: `src/services/observability/metrics.ts` (latency, traffic, error, saturation), `/metrics` dan `/metrics/alerts` dengan threshold di `docs/OPERATIONS.md`
-- [ ] OpenTelemetry tracing: belum ada SDK, tracing masih manual lewat `requestId`
+- [x] OpenTelemetry tracing: 2026-11-20. Provider di `src/services/observability/tracing.ts` (`NodeTracerProvider`, Resource `service.name`/`service.version`/`deployment.environment`, `ParentBasedSampler` + `TraceIdRatioBasedSampler`, `CompositePropagator` W3C tracecontext + baggage), middleware server span di `src/middleware/tracing.ts`. Setiap response membawa `x-trace-id` (32 hex) dan `traceparent` W3C; `traceparent` dari upstream diekstrak lebih dulu sehingga request yang lewat gateway tetap satu trace, header rusak diabaikan lalu diganti trace baru. Trace ID ikut dicetak di baris log `[HTTP] ... trace=<id>` lewat `logHttpRequest`. Span tetap dibuat walau `OTEL_ENABLED=false` (korelasi log tetap jalan tanpa collector); export OTLP HTTP hanya aktif saat `OTEL_ENABLED=true`, endpoint mengikuti `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` lalu `OTEL_EXPORTER_OTLP_ENDPOINT` dengan default `http://localhost:4318/v1/traces`. `initTracing` idempotent, `shutdownTracing` dipanggil pada `SIGINT`/`SIGTERM` supaya span di buffer tidak hilang. test: `src/tests/tracing.test.ts` 8 test (init idempotent, format traceparent, resolve URL OTLP dengan override, trace baru, propagasi parent, header rusak, error Hono tetap ERROR, error yang lolos ke `onError` mencatat exception event). Smoke runtime nyata: `GET /metrics/alerts` mengembalikan `x-trace-id` 32 hex + `traceparent` dan log `trace=4bf92f35...`. Batas: hanya level HTTP, query DB dan HTTP keluar belum diinstrumentasi
 - [~] Backup & restore database terjadwal: `scripts/backup-db.ps1` dan `scripts/restore-db.ps1` selesai dan smoke gagal-koneksi terbukti bersih, jadwal cron/Task Scheduler dan restore end-to-end belum terbukti karena Postgres lokal menolak login
 - [~] Compliance check: UU ITE, UU PDP (dan GDPR bila ada customer EU): checklist dan gap analysis ada di `docs/COMPLIANCE-UU-ITE-PDP.md`, review legal manusia belum
 - [x] Ganti password admin default setelah seed: `KNOWN_DEFAULT_ADMIN_PASSWORDS` menandai hash password seed, login mengirim `mustChangePassword` plus header `x-password-change-required`, `POST /auth/change-password` menolak password default
@@ -305,15 +305,15 @@ Belum ada satu pun item yang bisa dieksekusi karena template belum matang (cart,
 
 ## Rekap Progress
 
-Dihitung dari 192 item checkbox di dokumen ini (recount 2026-11-19; baris RTC-006 yang sebelumnya dobel sudah dihapus, angka 154/33 dari recount 2026-11-16 dan 159/28 dari 2026-11-17 sudah usang).
+Dihitung dari 192 item checkbox di dokumen ini (recount 2026-11-20; baris RTC-006 yang sebelumnya dobel sudah dihapus, angka 154/33 dari recount 2026-11-16, 159/28 dari 2026-11-17, dan 166/8/18 dari 2026-11-19 sudah usang).
 
 | Status | Jumlah | Arti |
 |---|---|---|
-| `[x]` DONE | 166 | kode dipakai + lulus unit test / bukti perintah |
+| `[x]` DONE | 167 | kode dipakai + lulus unit test / bukti perintah |
 | `[~]` PARTIAL | 8 | sebagian sub-item sudah ada |
-| `[ ]` BELUM | 18 | belum dikerjakan |
+| `[ ]` BELUM | 17 | belum dikerjakan |
 
-Progres nyata: Phase 0, Phase 1, Phase 2, dan Fase 2.5 selesai penuh. Phase 3 sudah menutup dua sub-baris realtime terakhir (indikator mengetik dan status online agen) di samping baris penuh sebelumnya (flash sale, loyalty, referral, wallet, optimasi API mobile, banner analytics dan targeting, live chat, abandoned cart recovery, 2FA TOTP admin), dengan tiga baris partial (analytics keuangan, moderasi manual, load test). Phase 4 sudah menutup enam baris: multi-warehouse inventory (INV-007, INV-008), aggregator logistik multi-provider (AGG-001..004), granular admin permission scopes (AUT-013), pricing engine lanjutan (PRC-002..004), A/B testing banner (CMS-005), dan rekomendasi produk. Section Keamanan & Operasional menutup empat baris (PII masking, IP allowlist admin, four golden signals plus alert threshold, ganti password admin default) dan menyisakan tiga baris partial (enkripsi AES-256 plus TLS 1.3, backup terjadwal, compliance legal). Sisa pekerjaan terbesar ada di Phase 4 (adapter pembayaran dan BNPL, marketing automation, scheduled report) dan itu semuanya menunggu kredensial atau spesifikasi eksternal. Baris partial dan kosong sudah memuat aksi manusia yang diperlukan supaya bisa dikerjakan tanpa menebak.
+Progres nyata: Phase 0, Phase 1, Phase 2, dan Fase 2.5 selesai penuh. Phase 3 sudah menutup dua sub-baris realtime terakhir (indikator mengetik dan status online agen) di samping baris penuh sebelumnya (flash sale, loyalty, referral, wallet, optimasi API mobile, banner analytics dan targeting, live chat, abandoned cart recovery, 2FA TOTP admin), dengan tiga baris partial (analytics keuangan, moderasi manual, load test). Phase 4 sudah menutup enam baris: multi-warehouse inventory (INV-007, INV-008), aggregator logistik multi-provider (AGG-001..004), granular admin permission scopes (AUT-013), pricing engine lanjutan (PRC-002..004), A/B testing banner (CMS-005), dan rekomendasi produk. Section Keamanan & Operasional menutup lima baris (PII masking, IP allowlist admin, four golden signals plus alert threshold, OpenTelemetry tracing, ganti password admin default) dan menyisakan tiga baris partial (enkripsi AES-256 plus TLS 1.3, backup terjadwal, compliance legal). Sisa pekerjaan terbesar ada di Phase 4 (adapter pembayaran dan BNPL, marketing automation, scheduled report) dan itu semuanya menunggu kredensial atau spesifikasi eksternal. Baris partial dan kosong sudah memuat aksi manusia yang diperlukan supaya bisa dikerjakan tanpa menebak.
 
 ### Bukti perintah terakhir
 
@@ -321,21 +321,19 @@ Progres nyata: Phase 0, Phase 1, Phase 2, dan Fase 2.5 selesai penuh. Phase 3 su
 $ cd brand-store-app && npx tsc --noEmit
 [tsc exit: 0]
 
-$ cd brand-store-app && npx prettier --check "src/**/*.ts"
+$ cd brand-store-app && npx prettier --check --end-of-line auto "src/**/*.ts"
 Checking formatting...
 All matched files use Prettier code style!
-[prettier exit: 0]
+[prettier exit: 0]   <-- `--end-of-line auto` wajib di repo ini karena file ber-CRLF
 
 $ cd brand-store-app && npm run lint
-Oops! Something went wrong! :(
-ESLint: 10.14.0
-You are linting "src/**/*.ts", but all of the files matching the glob pattern "src/**/*.ts" are ignored.
-[lint exit: 2]   <-- gate lint belum berfungsi, lihat catatan item ESLint di atas
+✖ 29 problems (0 errors, 29 warnings)
+[lint exit: 0]
 
 $ cd brand-store-app && npm test
-# tests 853
+# tests 861
 # suites 57
-# pass 853
+# pass 861
 # fail 0
 # cancelled 0
 # skipped 0
@@ -343,7 +341,7 @@ $ cd brand-store-app && npm test
 [test exit: 0]
 ```
 
-Baseline sebelum 2026-11-19 adalah 777 test. Kenaikan 76 test berasal dari `pricingEngine.test.ts` (13), `bannerExperiment.test.ts` (16), `recommendations.test.ts` (12), `piiMasking.test.ts` (9), `adminIpAllowlist.test.ts` (8), `metrics.test.ts` (11), dan `adminPasswordPolicy.test.ts` (7).
+Baseline sebelum 2026-11-19 adalah 777 test. Kenaikan 76 test berasal dari `pricingEngine.test.ts` (13), `bannerExperiment.test.ts` (16), `recommendations.test.ts` (12), `piiMasking.test.ts` (9), `adminIpAllowlist.test.ts` (8), `metrics.test.ts` (11), dan `adminPasswordPolicy.test.ts` (7). Tambahan 2026-11-20 adalah 8 test `tracing.test.ts` (853 menjadi 861).
 
 Smoke test HTTP nyata (29/29) dan verifikasi migrasi + seed tercatat lengkap di `AUDIT-REPORT.md` §3. Smoke test belum bisa dijalankan ulang sekarang karena kredensial `postgres` lokal belum diketahui (lihat blocker di bawah).
 
